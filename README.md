@@ -161,7 +161,10 @@ flowchart TD
   so rule changes propagate on the next run with no per-repo bump, accepting
   that a bad change affects every opted-in repo at once.
 - **Fixed schema.** No per-repo config or inputs, so the labels mean the same
-  thing in every repo.
+  thing in every repo. The gate reads structure from its own checkout, not your
+  copy of the form, so the scaffolded `task.yml` is not meant to be edited:
+  renaming a heading or changing the size options makes submitted issues stop
+  matching, and every one is marked failing.
 - **Going-forward only.** Opt-in does not auto-backfill; existing issues are
   validated when next edited. Run [`sweep`](#backfilling-the-backlog) to label
   the current backlog on demand.
