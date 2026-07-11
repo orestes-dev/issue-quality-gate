@@ -1,34 +1,49 @@
-// Deterministic, dependency-free validator: presence, min/max length,
-// checklist item count, enum membership only.
-//
-// Parsing is done with plain string operations (no regex): the submitted issue
-// body is a sequence of `### <label>` sections produced by the Issue Form.
+// Deterministic, dependency-free validator. The issue body is parsed with plain
+// string ops (no regex) into `### <label>` sections.
 
 import { RULES, NO_RESPONSE, LABEL, STATUS, OVERRIDE_HEADING } from './schema.js';
 import { loadForm } from './form.js';
 
-// STRUCTURE derived from the Issue Form at module load: the ordered fields the
-// gate checks, each `{ id, label, required, type, options }`. Joined to the
-// RULES on `id` per field. Loaded once; a broken form throws here (fail loud)
-// rather than silently degrading to "no checks".
+/**
+ * @typedef {import('./form.js').Field} Field
+ * @typedef {import('./schema.js').Rule} Rule
+ */
+
+/**
+ * One line of the scorecard: a single field's outcome.
+ * @typedef {object} Check
+ * @property {string} key - The field id.
+ * @property {string} label - The field's rendered heading.
+ * @property {'pass'|'warn'|'fail'} status
+ * @property {string} message - Rendered verbatim into the scorecard line.
+ */
+
+/**
+ * A full validation result: one check per field, in form order.
+ * @typedef {object} Scorecard
+ * @property {Check[]} checks
+ */
+
+// Structure from the Issue Form, joined to RULES on `id`. A broken form throws
+// here (fail loud) rather than degrading to "no checks".
 const FIELDS = loadForm();
 
-// Checklist item prefixes we accept, matching GitHub's task-list rendering:
-// any of the `-`/`*`/`+` bullets, checked (`[x]`/`[X]`) or unchecked (`[ ]`).
+// Checklist prefixes matching GitHub's task-list rendering.
 const BULLETS = ['-', '*', '+'];
 const BOXES = ['[ ]', '[x]', '[X]'];
 const CHECKLIST_PREFIXES = BULLETS.flatMap((bullet) =>
   BOXES.map((box) => `${bullet} ${box}`),
 );
 
-// The only headings that delimit a section. GitHub renders each Issue Form
-// field label as `### <label>`; the override rationale is a hand-written
-// `## Override rationale`. Restricting boundaries to this set means arbitrary
-// headings or fenced code blocks *inside* a field (e.g. a shell `## comment`
-// pasted into Context) no longer mis-split the body.
+// Only these headings delimit a section, so a `##`-looking line pasted inside a
+// field can't mis-split the body.
 const KNOWN_HEADINGS = new Set([...FIELDS.map((f) => f.label), OVERRIDE_HEADING]);
 
-// Return the heading text of a markdown h2/h3 line (`## ` or `### `), or null.
+/**
+ * The heading text of a markdown h2/h3 line (`## ` or `### `).
+ * @param {string} line
+ * @returns {string|null} The heading text, or null if the line isn't an h2/h3.
+ */
 function parseHeading(line) {
   let hashes = 0;
   while (hashes < line.length && line[hashes] === '#') hashes += 1;
@@ -36,8 +51,11 @@ function parseHeading(line) {
   return line.slice(hashes + 1).trim();
 }
 
-// Split a submitted issue body into a { heading: text } map. Only the known
-// schema headings act as section boundaries; every other line is content.
+/**
+ * Split a body into a { heading: text } map on the known headings.
+ * @param {string} body
+ * @returns {Record<string, string>}
+ */
 export function parseSections(body) {
   const sections = {};
   let current = null;
@@ -62,15 +80,23 @@ export function parseSections(body) {
   return sections;
 }
 
-// True when the body carries a non-empty `## Override rationale` section.
+/**
+ * Whether the body carries a non-empty `## Override rationale` section.
+ * @param {string} body
+ * @returns {boolean}
+ */
 export function hasOverrideRationale(body) {
   const sections = parseSections(body);
   const rationale = sections[OVERRIDE_HEADING];
   return typeof rationale === 'string' && rationale.trim().length > 0;
 }
 
-// A field is "present" when it has non-empty content that is not the
-// Issue Form's placeholder for an empty response.
+/**
+ * Field value, treating the form's empty-response placeholder as absent.
+ * @param {Record<string, string>} sections
+ * @param {string} heading
+ * @returns {string} The trimmed value, or '' when absent or placeholder.
+ */
 function fieldValue(sections, heading) {
   const raw = sections[heading];
   if (raw === undefined) return '';
@@ -79,8 +105,11 @@ function fieldValue(sections, heading) {
   return trimmed;
 }
 
-// Count checklist items that carry actual text. A bare `- [ ]` (the Issue
-// Form's prefill) is not a verifiable outcome, so it does not count.
+/**
+ * Count checklist items with actual text; a bare `- [ ]` prefill doesn't count.
+ * @param {string} text
+ * @returns {number}
+ */
 function countChecklistItems(text) {
   let count = 0;
   for (const rawLine of text.split('\n')) {
@@ -92,13 +121,24 @@ function countChecklistItems(text) {
   return count;
 }
 
-// One check result. `key` is the field id; `label` is its rendered heading.
-// `message` describes the outcome for its status (why it failed, or a short
-// confirmation when it passed) and is rendered verbatim into the scorecard line.
+/**
+ * Build one check result.
+ * @param {string} key - The field id.
+ * @param {string} label - The field's heading.
+ * @param {'pass'|'warn'|'fail'} status
+ * @param {string} message
+ * @returns {Check}
+ */
 const check = (key, label, status, message) => ({ key, label, status, message });
 
-// Enum (dropdown) field: membership in the form's options, plus any RULES
-// `blocking` values too large to land as one issue. Both hard.
+/**
+ * Dropdown: membership in the form's options, plus RULES `blocking` values too
+ * big to land as one issue. Both hard.
+ * @param {Field} field
+ * @param {Rule} [rule]
+ * @param {string} value
+ * @returns {Check}
+ */
 function checkEnum(field, rule, value) {
   const { id, label, options } = field;
   if (!options.includes(value)) {
@@ -115,7 +155,13 @@ function checkEnum(field, rule, value) {
   return check(id, label, STATUS.PASS, value);
 }
 
-// Checklist field: at least `minItems` non-empty markdown checklist items.
+/**
+ * Checklist: at least `minItems` non-empty markdown checklist items.
+ * @param {Field} field
+ * @param {Rule} rule
+ * @param {string} value
+ * @returns {Check}
+ */
 function checkChecklist(field, rule, value) {
   const { id, label } = field;
   const items = countChecklistItems(value);
@@ -125,8 +171,13 @@ function checkChecklist(field, rule, value) {
   return check(id, label, STATUS.PASS, `${items} checklist item${items === 1 ? '' : 's'}`);
 }
 
-// Prose field: RULES `minLength` is hard; `maxLength` is a warning-only fluff
-// detector. Worst status wins, so one line covers the field.
+/**
+ * Prose: `minLength` is hard, `maxLength` warning-only. Worst status wins.
+ * @param {Field} field
+ * @param {Rule} [rule]
+ * @param {string} value
+ * @returns {Check}
+ */
 function checkProse(field, rule, value) {
   const { id, label } = field;
   const min = rule?.minLength;
@@ -140,10 +191,14 @@ function checkProse(field, rule, value) {
   return check(id, label, STATUS.PASS, `present (${value.length} chars)`);
 }
 
-// One field's check, additive: presence fires from the form's `required`, the
-// remaining rules from the field's type and its joined RULES entry. A field
-// that is absent-but-optional passes rather than hard-failing, so a future
-// `required: false` field in the form correctly stops blocking on absence.
+/**
+ * One field's check. Absent-but-optional passes rather than failing, so a
+ * `required: false` field stops blocking on absence.
+ * @param {Record<string, string>} sections
+ * @param {Field} field
+ * @param {Rule} [rule]
+ * @returns {Check}
+ */
 function checkField(sections, field, rule) {
   const { id, label, required, type } = field;
   const value = fieldValue(sections, label);
@@ -156,22 +211,35 @@ function checkField(sections, field, rule) {
   return checkProse(field, rule, value);
 }
 
-// Validate a submitted issue body against the template-derived structure joined
-// to the RULES. Returns a full per-check scorecard (one line per field, in form
-// order) so the bot comment can show every check, pass included:
-//   { checks: {key,label,status,message}[] }.
+/**
+ * Validate a body against the form-derived structure joined to RULES. Returns a
+ * per-check scorecard, one line per field in form order.
+ * @param {string} body
+ * @returns {Scorecard}
+ */
 export function validate(body) {
   const sections = parseSections(body);
   const checks = FIELDS.map((field) => checkField(sections, field, RULES[field.id]));
   return { checks };
 }
 
-// Convenience predicates over a scorecard, so call sites need not know the
-// STATUS strings.
+/**
+ * @param {Check[]} checks
+ * @returns {Check[]} The failing checks.
+ */
 export const failures = (checks) => checks.filter((c) => c.status === STATUS.FAIL);
+
+/**
+ * @param {Check[]} checks
+ * @returns {Check[]} The warning checks.
+ */
 export const warnings = (checks) => checks.filter((c) => c.status === STATUS.WARN);
 
-// Which mutually-exclusive quality label the scorecard implies: worst wins.
+/**
+ * Which quality label the scorecard implies: worst wins.
+ * @param {Scorecard} scorecard
+ * @returns {string} One of the mutually-exclusive `LABEL` values.
+ */
 export function labelFor({ checks }) {
   if (checks.some((c) => c.status === STATUS.FAIL)) return LABEL.FAILING;
   if (checks.some((c) => c.status === STATUS.WARN)) return LABEL.WARNING;

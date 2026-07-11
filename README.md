@@ -1,22 +1,22 @@
 # issue-quality-gate
 
 A deterministic quality gate for GitHub issues, so they land well-scoped and
-actionable. Structural checks only — presence, length, checklist count, size
+actionable. Structural checks only: presence, length, checklist count, size
 enum.
 
 ## Features
 
-- **Deterministic checks** — presence, min/max length, acceptance-criteria
+- **Deterministic checks**: presence, min/max length, acceptance-criteria
   checklist count, size enum. Same rules every time.
-- **Scorecard comment** — every run upserts one **Issue Quality Checklist** with
+- **Scorecard comment**: every run upserts one **Issue Quality Checklist** with
   a ✅ / ⚠️ / ❌ line per check, so a clean issue gets confirmation, not silence.
-- **Three mutually-exclusive labels** — `issue-quality:failing` (hard block),
-  `issue-quality:warning` (non-blocking), `issue-quality:pass` — a filterable
+- **Three mutually-exclusive labels**: `issue-quality:failing` (hard block),
+  `issue-quality:warning` (non-blocking), `issue-quality:pass`, a filterable
   signal for downstream automation.
-- **Manual override** — a labelled escape hatch with a required written rationale.
-- **One-command opt-in** — `npx github:orestes-dev/issue-quality-gate init` drops
+- **Manual override**: a labelled escape hatch with a required written rationale.
+- **One-command opt-in**: `npx github:orestes-dev/issue-quality-gate init` drops
   the Issue Form + workflow; no per-repo config.
-- **Shared pre-flight validator** — run the same checks locally before
+- **Shared pre-flight validator**: run the same checks locally before
   `gh issue create`.
 
 ## What it checks
@@ -68,8 +68,8 @@ npx github:orestes-dev/issue-quality-gate init
 
 Run from the repo root. This drops two files, which together are the opt-in:
 
-- `.github/ISSUE_TEMPLATE/task.yml` — the Issue Form (canonical schema).
-- `.github/workflows/issue-quality.yml` — a thin workflow calling the shared
+- `.github/ISSUE_TEMPLATE/task.yml`: the Issue Form (canonical schema).
+- `.github/workflows/issue-quality.yml`: a thin workflow calling the shared
   Action at `@main`.
 
 Commit both. CI runs on `issues: opened` / `edited` always, and on `labeled` /
@@ -108,7 +108,7 @@ flags: it reads credentials from `gh auth token` and the target repo from
   run exits non-zero if any issue failed, so you can re-run to retry just those.
 - **Backlogs over 1000.** GitHub caps issue search at 1000 results. Because
   sweeping labels an issue (dropping it from the query), `sweep` prints a notice
-  when more remain — re-run until it stops.
+  when more remain; re-run until it stops.
 
 Labels are created on first use with intentional colors and descriptions, so
 `sweep` (or the first CI run) also materializes the three `issue-quality:*`
@@ -158,7 +158,7 @@ flowchart TD
 ## Notes
 
 - **`@main`, unpinned.** Consumers reference `orestes-dev/issue-quality-gate@main`,
-  so rule changes propagate on the next run with no per-repo bump — accepting
+  so rule changes propagate on the next run with no per-repo bump, accepting
   that a bad change affects every opted-in repo at once.
 - **Fixed schema.** No per-repo config or inputs, so the labels mean the same
   thing in every repo.
@@ -168,23 +168,5 @@ flowchart TD
 
 ## Architecture
 
-- `.github/ISSUE_TEMPLATE/task.yml` — the Issue Form: single source of truth for
-  issue **structure** (field ids, headings, required, dropdown options), parsed
-  at runtime.
-- `src/form.js` — parses the Issue Form into the structure the validator checks.
-- `src/schema.js` — the **rules** the form cannot express (min/max length,
-  checklist count, blocking sizes), keyed by field id, plus labels and statuses.
-- `src/validator.js` — joins structure to rules and validates; regex-free body
-  parse; returns a per-check scorecard (`{ checks }`).
-- `src/report.js` — renders the scorecard as the bot comment and CLI output.
-- `src/action.js` — CI entry: reconciles labels, upserts the scorecard comment.
-- `src/sweep.js` — backfill: searches a repo's unlabeled open issues and runs
-  each through the same `action.js` gate core.
-- `src/github.js` — zero-dependency REST client (labels, comments, search).
-- `bin/cli.js` — `init`, `validate`, and `sweep` commands.
-- `action.yml` — composite Action consumed by opted-in repos.
-
-Node.js ≥ 18 locally. On the runner the Action sets up Node 24 and installs its
-one runtime dependency (`yaml`, to parse the Issue Form) with Yarn, cached by the
-action's own lockfile so warm runs skip the install. A self-hosted runner needs
-Corepack available to provision Yarn.
+Structure comes from the Issue Form (`task.yml`, parsed at runtime); rules the
+form can't express live in `src/schema.js`.

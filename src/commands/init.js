@@ -9,8 +9,7 @@ const ROOT = resolve(HERE, '..', '..');
 
 const TEMPLATES = [
   {
-    // The canonical Issue Form is this action's own; the consumer's copy is
-    // UI-only (the gate reads structure from this action's checkout at runtime).
+    // Consumer's copy is UI-only; the gate reads structure from its own checkout.
     from: join(ROOT, '.github', 'ISSUE_TEMPLATE', 'task.yml'),
     to: join('.github', 'ISSUE_TEMPLATE', 'task.yml'),
   },
@@ -20,12 +19,14 @@ const TEMPLATES = [
   },
 ];
 
+/**
+ * Copy the Issue Form and workflow into the current working directory, skipping
+ * files that already exist. Warns (but proceeds) when not at a repo root.
+ * @returns {void}
+ */
 export function init() {
-  // Soft guard against the one silent foot-gun: run from a subdirectory and the
-  // files land where GitHub never looks. `.github/` is only read at the repo
-  // root, whose worktree carries a `.git` entry (a directory in a normal clone,
-  // a file in a linked worktree). Warn but proceed: scaffolding into a fresh
-  // dir before `git init` is legitimate.
+  // Soft guard: `.github/` is only read at the repo root. Warn but proceed;
+  // scaffolding into a fresh dir before `git init` is legitimate.
   if (!existsSync(resolve(process.cwd(), '.git'))) {
     console.warn(
       'warning: no .git in the current directory. GitHub only reads .github/ ' +

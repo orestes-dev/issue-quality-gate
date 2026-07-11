@@ -1,11 +1,5 @@
-// Derive the issue STRUCTURE from the GitHub Issue Form at runtime.
-//
-// The Issue Form (`.github/ISSUE_TEMPLATE/task.yml`) is the single source of
-// truth for structure: each input field's id, heading (`label`), whether it is
-// required, its type, and any dropdown options. `schema.js` owns the RULES the
-// form cannot express; the validator joins the two on `id`.
-//
-// `yaml` is used ONLY here, ONLY to parse the form. The submitted issue body is
+// Derive the issue STRUCTURE from the Issue Form at runtime: each field's id,
+// label, required, type, options. `yaml` is used only here; the issue body is
 // still parsed with plain string ops in `validator.js`.
 
 import { readFileSync } from 'node:fs';
@@ -13,24 +7,33 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 
+/**
+ * One input field derived from the Issue Form, joined to a RULES entry on `id`.
+ * @typedef {object} Field
+ * @property {string} id - The form element id, stable across heading renames.
+ * @property {string} label - The rendered `### <label>` heading.
+ * @property {'input'|'textarea'|'dropdown'} type
+ * @property {boolean} required
+ * @property {string[]|undefined} options - Dropdown choices; undefined otherwise.
+ */
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-// This action's OWN canonical Issue Form. The composite action runs from
-// `$GITHUB_ACTION_PATH` (this checkout), so the structure is read from here, not
-// from the consumer repo's copied form, which is UI-only. Resolved relative to
-// this module so it is robust to the process working directory.
+// This action's own canonical form. The composite action runs from its own
+// checkout, so structure is read from here, not the consumer's UI-only copy.
 const FORM_PATH = resolve(HERE, '..', '.github', 'ISSUE_TEMPLATE', 'task.yml');
 
-// The input element types a submitter fills in. A `type: markdown` block is
-// intro prose with no id and no response, so it is not part of the structure.
+// Input types a submitter fills in; a `markdown` block is intro prose, not structure.
 const INPUT_TYPES = new Set(['input', 'textarea', 'dropdown']);
 
-// Parse an Issue Form's YAML into an ordered list of input fields:
-//   { id, label, required, type, options }[]
-// Throw on a structurally unusable form (no body, no input fields, a field with
-// no id or no label). This parser decides the schema for every issue on every
-// consumer repo, so degrading to "no fields" — which would pass every issue
-// unchecked — is never acceptable; fail loud instead.
+/**
+ * Parse an Issue Form into an ordered field list. Throw on an unusable form:
+ * degrading to "no fields" would pass every issue unchecked.
+ * @param {string} yamlText - Raw Issue Form YAML.
+ * @returns {Field[]} The input fields, in form order.
+ * @throws {Error} When the form has no body, no input fields, or a field
+ *   missing an id or label.
+ */
 export function parseForm(yamlText) {
   const doc = parse(yamlText);
   if (!doc || !Array.isArray(doc.body)) {
@@ -56,7 +59,10 @@ export function parseForm(yamlText) {
   return fields;
 }
 
-// Parse this action's own canonical Issue Form into its structure.
+/**
+ * Parse this action's own canonical Issue Form.
+ * @returns {Field[]}
+ */
 export function loadForm() {
   return parseForm(readFileSync(FORM_PATH, 'utf8'));
 }
