@@ -1,0 +1,17 @@
+{
+  "name": "issue-quality-gate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic quality gate for GitHub issues so they are reliable input for autonomous coding agents.",
+  "type": "module",
+  "bin": {
+    "issue-quality-gate": "bin/cli.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "AGPL-3.0-or-later"
+}

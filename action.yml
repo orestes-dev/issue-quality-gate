@@ -1,0 +1,14 @@
+name: Issue Quality Gate
+description: >-
+  Deterministic quality gate for GitHub issues. Applies one of the
+  issue-quality:failing / issue-quality:warning / issue-quality:pass labels and
+  posts an explanatory bot comment when the issue is not clean.
+author: orestes-dev
+runs:
+  using: composite
+  steps:
+    - name: Validate issue
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/src/action.js"
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
