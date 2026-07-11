@@ -1,38 +1,29 @@
-// Single source of truth for the issue schema the gate enforces.
+// The RULES the gate enforces plus the fixed labels/statuses it applies.
 //
-// The GitHub Issue Form (templates/issue-form.yml) is the canonical schema for
-// *authoring* an issue; this module is the canonical schema for *validating*
-// one. The field HEADINGS below MUST match the Issue Form element labels,
-// because GitHub renders each element's `label` as a `### <label>` heading in
-// the submitted issue body, and that is what the validator parses.
+// STRUCTURE (which fields exist, their headings, whether they are required, and
+// any dropdown options) is NOT here: it is owned by the Issue Form
+// (`.github/ISSUE_TEMPLATE/task.yml`) and derived from it at runtime by
+// `form.js`. This module owns only what the form cannot express — the RULES —
+// keyed by field `id` and joined to the structure in the validator.
 
-// Rendered `### ` headings, matching Issue Form element labels exactly.
-export const FIELD = {
-  CONTEXT: 'Context',
-  ACCEPTANCE_CRITERIA: 'Acceptance Criteria',
-  OUT_OF_SCOPE: 'Out of Scope',
-  SIZE: 'Size',
+// Constraints the Issue Form cannot express, keyed by field `id` (the form's
+// element id, stable across heading renames). The validator joins these onto
+// the template-derived structure; a rule for an unknown field, or a field with
+// no rule, fails the bijection test. Every number here is restated in the
+// README's human-readable bar and guarded by a drift test.
+//
+//   minLength / maxLength  prose length floor (hard) / ceiling (warning)
+//   checklist / minItems   require a markdown checklist with N non-empty items
+//   blocking               dropdown options too large to land as one issue
+export const RULES = {
+  context: { minLength: 30, maxLength: 1500 },
+  'acceptance-criteria': { checklist: true, minItems: 1 },
+  'out-of-scope': { minLength: 10 },
+  size: { blocking: ['L', 'XL'] },
 };
 
 // GitHub renders an empty optional field as this literal. Treat it as absent.
 export const NO_RESPONSE = '_No response_';
-
-// Size enum, in ascending order. L/XL are too big to land as one issue.
-export const SIZES = ['XS', 'S', 'M', 'L', 'XL'];
-export const BLOCKING_SIZES = ['L', 'XL'];
-
-// Minimum trimmed length (characters) for prose fields. Presence + min-length
-// are both hard errors.
-export const MIN_LENGTH = {
-  [FIELD.CONTEXT]: 30,
-  [FIELD.OUT_OF_SCOPE]: 10,
-};
-
-// Maximum length for the narrative field. Exceeding it is a WARNING only: a
-// fluff / narrative-bloat detector that flags but never blocks.
-export const MAX_LENGTH = {
-  [FIELD.CONTEXT]: 1500,
-};
 
 // Per-check outcome, worst-wins across a field's rules. The scorecard comment
 // renders one line per check with an icon derived from this; the mutually

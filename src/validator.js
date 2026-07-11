@@ -4,17 +4,14 @@
 // Parsing is done with plain string operations (no regex): the submitted issue
 // body is a sequence of `### <label>` sections produced by the Issue Form.
 
-import {
-  FIELD,
-  NO_RESPONSE,
-  SIZES,
-  BLOCKING_SIZES,
-  MIN_LENGTH,
-  MAX_LENGTH,
-  LABEL,
-  STATUS,
-  OVERRIDE_HEADING,
-} from './schema.js';
+import { RULES, NO_RESPONSE, LABEL, STATUS, OVERRIDE_HEADING } from './schema.js';
+import { loadForm } from './form.js';
+
+// STRUCTURE derived from the Issue Form at module load: the ordered fields the
+// gate checks, each `{ id, label, required, type, options }`. Joined to the
+// RULES on `id` per field. Loaded once; a broken form throws here (fail loud)
+// rather than silently degrading to "no checks".
+const FIELDS = loadForm();
 
 // Checklist item prefixes we accept, matching GitHub's task-list rendering:
 // any of the `-`/`*`/`+` bullets, checked (`[x]`/`[X]`) or unchecked (`[ ]`).
@@ -29,7 +26,7 @@ const CHECKLIST_PREFIXES = BULLETS.flatMap((bullet) =>
 // `## Override rationale`. Restricting boundaries to this set means arbitrary
 // headings or fenced code blocks *inside* a field (e.g. a shell `## comment`
 // pasted into Context) no longer mis-split the body.
-const KNOWN_HEADINGS = new Set([...Object.values(FIELD), OVERRIDE_HEADING]);
+const KNOWN_HEADINGS = new Set([...FIELDS.map((f) => f.label), OVERRIDE_HEADING]);
 
 // Return the heading text of a markdown h2/h3 line (`## ` or `### `), or null.
 function parseHeading(line) {
@@ -95,99 +92,78 @@ function countChecklistItems(text) {
   return count;
 }
 
-// One check result. `message` describes the outcome for its status (why it
-// failed, or a short confirmation when it passed) and is rendered verbatim into
-// the scorecard line for `label`.
+// One check result. `key` is the field id; `label` is its rendered heading.
+// `message` describes the outcome for its status (why it failed, or a short
+// confirmation when it passed) and is rendered verbatim into the scorecard line.
 const check = (key, label, status, message) => ({ key, label, status, message });
 
-// A prose field: presence + min-length are hard; an optional max-length is a
-// warning-only fluff detector. Worst status wins, so one line covers the field.
-function checkProse(sections, key, heading) {
-  const value = fieldValue(sections, heading);
-  if (value === '') return check(key, heading, STATUS.FAIL, 'missing or empty');
-  const min = MIN_LENGTH[heading];
-  if (min && value.length < min) {
+// Enum (dropdown) field: membership in the form's options, plus any RULES
+// `blocking` values too large to land as one issue. Both hard.
+function checkEnum(field, rule, value) {
+  const { id, label, options } = field;
+  if (!options.includes(value)) {
+    return check(id, label, STATUS.FAIL, `must be one of ${options.join(', ')}`);
+  }
+  if ((rule?.blocking ?? []).includes(value)) {
     return check(
-      key,
-      heading,
+      id,
+      label,
       STATUS.FAIL,
-      `too short (${value.length} chars, need at least ${min})`,
+      `${value} is too big to land as one issue; split it into smaller issues`,
     );
   }
-  const max = MAX_LENGTH[heading];
-  if (max && value.length > max) {
-    return check(
-      key,
-      heading,
-      STATUS.WARN,
-      `long (${value.length} chars, over ${max}); trim narrative bloat`,
-    );
-  }
-  return check(key, heading, STATUS.PASS, `present (${value.length} chars)`);
+  return check(id, label, STATUS.PASS, value);
 }
 
-// Acceptance Criteria: a checklist with at least one non-empty item.
-function checkAcceptanceCriteria(sections) {
-  const key = 'acceptance-criteria';
-  const heading = FIELD.ACCEPTANCE_CRITERIA;
-  const value = fieldValue(sections, heading);
-  if (value === '') return check(key, heading, STATUS.FAIL, 'missing or empty');
+// Checklist field: at least `minItems` non-empty markdown checklist items.
+function checkChecklist(field, rule, value) {
+  const { id, label } = field;
   const items = countChecklistItems(value);
-  if (items < 1) {
-    return check(
-      key,
-      heading,
-      STATUS.FAIL,
-      'must contain at least one checklist item (`- [ ]`)',
-    );
+  if (items < (rule.minItems ?? 1)) {
+    return check(id, label, STATUS.FAIL, 'must contain at least one checklist item (`- [ ]`)');
   }
-  return check(
-    key,
-    heading,
-    STATUS.PASS,
-    `${items} checklist item${items === 1 ? '' : 's'}`,
-  );
+  return check(id, label, STATUS.PASS, `${items} checklist item${items === 1 ? '' : 's'}`);
 }
 
-// Size: enum membership + L/XL blocks as too large to land as one issue. Both hard.
-function checkSize(sections) {
-  const key = 'size';
-  const heading = FIELD.SIZE;
-  const size = fieldValue(sections, heading) || null;
-  if (size === null) return { check: check(key, heading, STATUS.FAIL, 'missing'), size };
-  if (!SIZES.includes(size)) {
-    return {
-      check: check(key, heading, STATUS.FAIL, `must be one of ${SIZES.join(', ')}`),
-      size,
-    };
+// Prose field: RULES `minLength` is hard; `maxLength` is a warning-only fluff
+// detector. Worst status wins, so one line covers the field.
+function checkProse(field, rule, value) {
+  const { id, label } = field;
+  const min = rule?.minLength;
+  if (min && value.length < min) {
+    return check(id, label, STATUS.FAIL, `too short (${value.length} chars, need at least ${min})`);
   }
-  if (BLOCKING_SIZES.includes(size)) {
-    return {
-      check: check(
-        key,
-        heading,
-        STATUS.FAIL,
-        `${size} is too big to land as one issue; split it into smaller issues`,
-      ),
-      size,
-    };
+  const max = rule?.maxLength;
+  if (max && value.length > max) {
+    return check(id, label, STATUS.WARN, `long (${value.length} chars, over ${max}); trim narrative bloat`);
   }
-  return { check: check(key, heading, STATUS.PASS, size), size };
+  return check(id, label, STATUS.PASS, `present (${value.length} chars)`);
 }
 
-// Validate a submitted issue body. Returns a full per-check scorecard so the
-// bot comment can show every check (pass included), not just the failures:
-//   { checks: {key,label,status,message}[], size: string|null }.
+// One field's check, additive: presence fires from the form's `required`, the
+// remaining rules from the field's type and its joined RULES entry. A field
+// that is absent-but-optional passes rather than hard-failing, so a future
+// `required: false` field in the form correctly stops blocking on absence.
+function checkField(sections, field, rule) {
+  const { id, label, required, type } = field;
+  const value = fieldValue(sections, label);
+  if (value === '') {
+    if (!required) return check(id, label, STATUS.PASS, 'optional; not provided');
+    return check(id, label, STATUS.FAIL, type === 'dropdown' ? 'missing' : 'missing or empty');
+  }
+  if (type === 'dropdown') return checkEnum(field, rule, value);
+  if (rule?.checklist) return checkChecklist(field, rule, value);
+  return checkProse(field, rule, value);
+}
+
+// Validate a submitted issue body against the template-derived structure joined
+// to the RULES. Returns a full per-check scorecard (one line per field, in form
+// order) so the bot comment can show every check, pass included:
+//   { checks: {key,label,status,message}[] }.
 export function validate(body) {
   const sections = parseSections(body);
-  const size = checkSize(sections);
-  const checks = [
-    checkProse(sections, 'context', FIELD.CONTEXT),
-    checkAcceptanceCriteria(sections),
-    checkProse(sections, 'out-of-scope', FIELD.OUT_OF_SCOPE),
-    size.check,
-  ];
-  return { checks, size: size.size };
+  const checks = FIELDS.map((field) => checkField(sections, field, RULES[field.id]));
+  return { checks };
 }
 
 // Convenience predicates over a scorecard, so call sites need not know the
