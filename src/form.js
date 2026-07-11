@@ -34,6 +34,22 @@ const INPUT_TYPES = new Set(['input', 'textarea', 'dropdown']);
  * @throws {Error} When the form has no body, no input fields, or a field
  *   missing an id or label.
  */
+/**
+ * Throw if any two fields share the same value for `key`.
+ * @param {Field[]} fields
+ * @param {'id'|'label'} key
+ * @returns {void}
+ * @throws {Error} On the first duplicate found.
+ */
+function assertUnique(fields, key) {
+  const seen = new Set();
+  for (const field of fields) {
+    const value = field[key];
+    if (seen.has(value)) throw new Error(`Issue Form has duplicate ${key} "${value}".`);
+    seen.add(value);
+  }
+}
+
 export function parseForm(yamlText) {
   const doc = parse(yamlText);
   if (!doc || !Array.isArray(doc.body)) {
@@ -56,6 +72,12 @@ export function parseForm(yamlText) {
     });
 
   if (fields.length === 0) throw new Error('Issue Form has no input fields.');
+
+  // Ids join to RULES and labels key section parsing; a duplicate of either
+  // silently collides two fields onto one rule or one section. Fail loud.
+  assertUnique(fields, 'id');
+  assertUnique(fields, 'label');
+
   return fields;
 }
 
