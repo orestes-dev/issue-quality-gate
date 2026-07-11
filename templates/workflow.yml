@@ -1,0 +1,35 @@
+# Issue quality gate: thin consuming workflow.
+#
+# This file is the opt-in: its presence turns CI enforcement on for this repo
+# and signals coding agents to pre-flight-validate before `gh issue create`.
+# It calls the shared reusable Action, pinned to @main so rule/schema changes
+# propagate on the next run with no per-repo bump.
+name: Issue Quality Gate
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled]
+permissions:
+  issues: write
+# Serialize per issue so rapid edits do not race on labels or the comment; a
+# newer run cancels an in-flight older one.
+concurrency:
+  group: issue-quality-${{ github.event.issue.number }}
+  cancel-in-progress: true
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    # Content edits (opened/edited) always re-run the gate. Label events re-run
+    # it only when a HUMAN touches a gate-relevant label: the override toggle, or
+    # an issue-quality:* label hand-edited (so a manual removal self-heals). The
+    # gate writes its own labels with GITHUB_TOKEN, and GitHub suppresses those
+    # events from triggering runs; the sender check is defense-in-depth for
+    # consumers who wire in a PAT or App token, where that suppression does not
+    # apply. run() is diff-based, so any redundant trigger is a no-op.
+    if: >-
+      github.event.action == 'opened' ||
+      github.event.action == 'edited' ||
+      (github.event.sender.login != 'github-actions[bot]' &&
+       (github.event.label.name == 'override:issue-quality' ||
+        startsWith(github.event.label.name, 'issue-quality:')))
+    steps:
+      - uses: orestes-dev/issue-quality-gate@main

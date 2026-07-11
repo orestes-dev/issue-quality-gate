@@ -1,0 +1,27 @@
+# Dogfood: run this repo's own gate against its own issues, using the local
+# action (`uses: ./`) rather than the published @main reference.
+name: Issue Quality Gate
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled]
+permissions:
+  issues: write
+  contents: read # actions/checkout via `uses: ./` needs it on private repos
+concurrency:
+  group: issue-quality-${{ github.event.issue.number }}
+  cancel-in-progress: true
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    # See templates/workflow.yml: content events always run; label events run
+    # only when a human touches the override or an issue-quality:* label, so the
+    # gate never re-triggers itself but manual quality-label edits self-heal.
+    if: >-
+      github.event.action == 'opened' ||
+      github.event.action == 'edited' ||
+      (github.event.sender.login != 'github-actions[bot]' &&
+       (github.event.label.name == 'override:issue-quality' ||
+        startsWith(github.event.label.name, 'issue-quality:')))
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
