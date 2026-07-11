@@ -9,7 +9,9 @@ const ROOT = resolve(HERE, '..', '..');
 
 const TEMPLATES = [
   {
-    from: join(ROOT, 'templates', 'issue-form.yml'),
+    // The canonical Issue Form is this action's own; the consumer's copy is
+    // UI-only (the gate reads structure from this action's checkout at runtime).
+    from: join(ROOT, '.github', 'ISSUE_TEMPLATE', 'task.yml'),
     to: join('.github', 'ISSUE_TEMPLATE', 'task.yml'),
   },
   {
