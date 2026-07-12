@@ -1,8 +1,11 @@
 # quality-gate
 
-A deterministic quality gate for GitHub issues, so they land well-scoped and
-actionable. Structural checks only: title format, presence, length, checklist
-count, size enum.
+A deterministic quality gate for GitHub issues and pull requests, so work lands
+well-scoped and actionable. Structural checks only: title format, presence,
+length, checklist count, size enum. The **issue gate** is advisory (labels +
+scorecard, never fails CI); the **PR gate** hard-fails CI so a red check blocks
+merge. Both are two callers of one shared core; see the [PR gate](#pull-request-gate)
+section and [`CONTEXT.md`](CONTEXT.md).
 
 ## Features
 
@@ -210,6 +213,31 @@ flowchart TD
     C -->|no| E[validate: title format, presence, length, AC checklist, size]
     E --> F[label by worst status + upsert scorecard comment] --> Z
 ```
+
+## Pull request gate
+
+A second entry point runs the same core over a pull request on `pull_request`
+events. It checks structural presence, never conformance:
+
+- **Title**: Conventional Commits `type(scope): summary`, same rule as issues.
+- **Required sections**: `## Summary` and `## Verification` present and
+  non-empty. A `## Divergence` section ships in
+  [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) but its
+  conditional rule is a later slice, so its presence is not yet enforced.
+
+The PR structure is defined by a code descriptor (`src/pr-validator.js`), the
+source of truth the Markdown template is drift-tested against. Any error (a
+missing section, a non-conventional title) **hard-fails CI**, turning the check
+red and blocking merge; warnings stay green. Outcomes carry exactly one of
+`pr-quality:pass` / `pr-quality:warning` / `pr-quality:failing` plus an upserted
+**PR Quality Checklist** scorecard, both diff-based like the issue gate.
+
+Bot-authored PRs (actor login ends in `[bot]`) auto-pass with no override, since
+no human is present to apply one. A human bypasses with `override:pr-quality`
+plus a `## Override rationale` section, mirroring the issue override. The
+consumer workflow lives in
+[`templates/pr-workflow.yml`](templates/pr-workflow.yml) and needs
+`permissions: pull-requests: write`.
 
 ## Notes
 
