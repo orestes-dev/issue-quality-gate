@@ -1,10 +1,8 @@
-// CI entry point: validates an issue body, reconciles the mutually-exclusive
-// quality labels, and keeps a single bot comment in sync. Every write is
-// diff-based, so a re-run in the correct state writes nothing and the label
-// triggers do not loop.
-
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+// Gate core: validates an issue body, reconciles the mutually-exclusive quality
+// labels, and keeps a single bot comment in sync. Every write is diff-based, so
+// a re-run in the correct state writes nothing and the label triggers do not
+// loop. The process entry that feeds this from the CI environment lives in
+// `commands/action.js`.
 
 import {
   validate,
@@ -22,9 +20,9 @@ import {
   OVERRIDE_LABEL,
   OVERRIDE_HEADING,
 } from "./schema.js";
-import { GitHub } from "./github.js";
 
 /** @typedef {import('./validator.js').Scorecard} Scorecard */
+/** @typedef {import('./github.js').GitHub} GitHub */
 
 const ALL_QUALITY_LABELS = [LABEL.FAILING, LABEL.WARNING, LABEL.PASS];
 
@@ -35,17 +33,6 @@ const ALL_QUALITY_LABELS = [LABEL.FAILING, LABEL.WARNING, LABEL.PASS];
  */
 const isGateComment = (c) =>
   c.user?.type === "Bot" && c.body?.includes(COMMENT_MARKER);
-
-/**
- * Load the webhook event payload from `GITHUB_EVENT_PATH`.
- * @returns {object}
- * @throws {Error} When the env var is unset.
- */
-function loadEvent() {
-  const path = process.env.GITHUB_EVENT_PATH;
-  if (!path) throw new Error("GITHUB_EVENT_PATH is not set.");
-  return JSON.parse(readFileSync(path, "utf8"));
-}
 
 /**
  * Drive the issue to carry exactly `desiredLabel` (or none). Add before remove:
@@ -155,27 +142,4 @@ export async function run({ gh, event }) {
     return `issue #${issue.number}: warning (${warns.length} warning(s))`;
   }
   return `issue #${issue.number}: passing`;
-}
-
-/**
- * CLI entry: build a client from the environment and gate the triggering issue.
- * @returns {Promise<void>}
- */
-async function main() {
-  const [owner, repo] = (process.env.GITHUB_REPOSITORY || "").split("/");
-  const gh = new GitHub({
-    token: process.env.GITHUB_TOKEN,
-    apiUrl: process.env.GITHUB_API_URL,
-    owner,
-    repo,
-  });
-  const summary = await run({ gh, event: loadEvent() });
-  console.log(summary);
-}
-
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  main().catch((err) => {
-    console.error(err.message || err);
-    process.exit(1);
-  });
 }

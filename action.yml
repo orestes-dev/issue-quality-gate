@@ -35,6 +35,6 @@ runs:
       run: yarn install --immutable
     - name: Validate issue
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/src/action.js"
+      run: node "$GITHUB_ACTION_PATH/src/commands/action.js"
       env:
         GITHUB_TOKEN: ${{ github.token }}

@@ -27,7 +27,7 @@ export function buildQuery() {
  * @returns {Promise<{swept: number, failed: number[], totalCount: number, capped: boolean}>}
  *   `capped` is true when the 1000-result cap truncated the results; re-run to continue.
  */
-export async function sweep({ gh, log = () => {} }) {
+export async function sweepIssues({ gh, log = () => {} }) {
   const { totalCount, items } = await gh.searchIssues(buildQuery());
   let swept = 0;
   const failed = [];

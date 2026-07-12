@@ -1,26 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { sweep, buildQuery } from "./sweep.js";
+import { sweepIssues, buildQuery } from "./sweep.js";
 import { LABEL } from "./schema.js";
-
-const goodBody = [
-  "### Context",
-  "",
-  "The dashboard refetches everything on every keystroke, which is slow. We want it debounced so typing stays responsive.",
-  "",
-  "### Acceptance Criteria",
-  "",
-  "- [ ] Input is debounced to 300ms",
-  "",
-  "### Out of Scope",
-  "",
-  "- Redesigning the search UI",
-  "",
-  "### Size",
-  "",
-  "S",
-].join("\n");
+import { goodBody } from "./fixtures.js";
 
 const failingBody = goodBody.replace("### Size", "### Size\n\nL\n");
 
@@ -74,7 +57,7 @@ test("sweep labels each matched issue by its validated outcome", async () => {
     },
     search: { totalCount: 2, items: [{ number: 1 }, { number: 2 }] },
   });
-  const result = await sweep({ gh });
+  const result = await sweepIssues({ gh });
   assert.equal(result.swept, 2);
   assert.deepEqual(result.failed, []);
   assert.equal(result.capped, false);
@@ -102,7 +85,7 @@ test("sweep continues past a failing issue and reports it", async () => {
     },
     throwOn: 2,
   });
-  const result = await sweep({ gh });
+  const result = await sweepIssues({ gh });
   assert.equal(result.swept, 2);
   assert.deepEqual(result.failed, [2]);
   assert.ok(
@@ -116,7 +99,7 @@ test("sweep flags a capped result when more issues match than were fetched", asy
     issues: { 1: { body: goodBody, labels: [] } },
     search: { totalCount: 1500, items: [{ number: 1 }] },
   });
-  const result = await sweep({ gh });
+  const result = await sweepIssues({ gh });
   assert.equal(result.capped, true);
 });
 
@@ -126,6 +109,6 @@ test("sweep passes the running summary to its log callback", async () => {
     issues: { 1: { body: goodBody, labels: [] } },
     search: { totalCount: 1, items: [{ number: 1 }] },
   });
-  await sweep({ gh, log: (l) => lines.push(l) });
+  await sweepIssues({ gh, log: (l) => lines.push(l) });
   assert.ok(lines.some((l) => /issue #1: passing/.test(l)));
 });
