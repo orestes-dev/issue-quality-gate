@@ -28,6 +28,25 @@ function runInit(dir, ...args) {
   });
 }
 
+// Run `cli.js <args>` with cwd set to `dir`, for the file-oriented commands.
+function runCli(dir, ...args) {
+  return spawnSync(process.execPath, [CLI, ...args], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+}
+
+// A PR body that passes every local structural check: both required sections
+// present and non-empty, no Divergence flagged.
+const PASSING_PR_BODY = [
+  "## Summary",
+  "Adds the validate-pr preflight command.",
+  "",
+  "## Verification",
+  "`yarn test` is green.",
+  "",
+].join("\n");
+
 function withTempDir(fn) {
   const dir = mkdtempSync(join(tmpdir(), "iqg-init-"));
   try {
@@ -127,5 +146,46 @@ test("init --force upgrades drifted files and skips identical ones", () => {
     assert.match(stdout, /update\s+.*task\.yml/);
     assert.match(stdout, /ok\s+.*issue-quality\.yml/);
     assert.equal(readFileSync(form, "utf8"), canonical);
+  });
+});
+
+test("validate-pr passes a well-formed PR body with a conventional title", () => {
+  withTempDir((dir) => {
+    const file = join(dir, "pr.md");
+    writeFileSync(file, PASSING_PR_BODY);
+    const { status, stdout } = runCli(
+      dir,
+      "validate-pr",
+      "pr.md",
+      "--title",
+      "feat(cli): add validate-pr preflight command",
+    );
+    assert.equal(status, 0);
+    assert.match(stdout, /PR quality gate: passed/);
+  });
+});
+
+test("validate-pr exits 1 on a missing required section", () => {
+  withTempDir((dir) => {
+    const file = join(dir, "pr.md");
+    writeFileSync(file, "## Summary\nOnly a summary, no verification.\n");
+    const { status, stdout } = runCli(
+      dir,
+      "validate-pr",
+      "pr.md",
+      "--title",
+      "feat(cli): add validate-pr preflight command",
+    );
+    assert.equal(status, 1);
+    assert.match(stdout, /PR quality gate: FAILED/);
+    assert.match(stdout, /Verification/);
+  });
+});
+
+test("validate-pr exits 2 on a usage error when no file is given", () => {
+  withTempDir((dir) => {
+    const { status, stderr } = runCli(dir, "validate-pr");
+    assert.equal(status, 2);
+    assert.match(stderr, /usage: quality-gate validate-pr <file>/);
   });
 });

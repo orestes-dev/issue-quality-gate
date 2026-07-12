@@ -258,6 +258,18 @@ consumer workflow lives in
 [`templates/pr-workflow.yml`](templates/pr-workflow.yml) and needs
 `permissions: pull-requests: write`.
 
+Before opening a PR, run the same structural checks on a draft body file with
+`validate-pr`, the PR-side mirror of `validate`:
+
+```sh
+npx github:orestes-dev/quality-gate validate-pr path/to/pr-body.md \
+  --title "feat(search): debounce the query input"
+```
+
+It evaluates only what is knowable locally (section presence + title); it never
+attempts linked-issue readiness, which stays CI-authoritative (no PR exists yet
+to resolve `closingIssuesReferences`). Exits non-zero on hard errors.
+
 ## Notes
 
 - **`@main`, unpinned.** Consumers reference `orestes-dev/quality-gate@main`,
