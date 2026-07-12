@@ -425,7 +425,7 @@ const GATE_SENDER = "github-actions[bot]";
 
 test("both PR workflows couple the trigger filter to the schema strings", () => {
   for (const rel of [
-    "templates/pr-workflow.yml",
+    "templates/workflow/pr-quality.yml",
     ".github/workflows/pr-quality.yml",
   ]) {
     const yaml = read(rel);
@@ -447,7 +447,7 @@ test("both PR workflows couple the trigger filter to the schema strings", () => 
 });
 
 test("the two PR workflows agree on trigger, permissions, concurrency, and filter", () => {
-  const consumer = parse(read("templates/pr-workflow.yml"));
+  const consumer = parse(read("templates/workflow/pr-quality.yml"));
   const dogfood = parse(read(".github/workflows/pr-quality.yml"));
 
   assert.deepEqual(

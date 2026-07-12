@@ -222,7 +222,7 @@ const GATE_SENDER = "github-actions[bot]";
 
 test("both workflows couple the trigger filter to the schema strings", () => {
   for (const rel of [
-    "templates/workflow.yml",
+    "templates/workflow/issue-quality.yml",
     ".github/workflows/issue-quality.yml",
   ]) {
     const yaml = read(rel);
@@ -247,7 +247,7 @@ test("both workflows couple the trigger filter to the schema strings", () => {
 // parts that MUST stay in lock-step so the repo gates itself exactly as it tells
 // consumers to.
 test("the two workflows agree on their shared trigger, permissions, concurrency, and filter", () => {
-  const consumer = parse(read("templates/workflow.yml"));
+  const consumer = parse(read("templates/workflow/issue-quality.yml"));
   const dogfood = parse(read(".github/workflows/issue-quality.yml"));
 
   // Issue trigger types. (`on` stays a string key under YAML 1.2, not a bool.)

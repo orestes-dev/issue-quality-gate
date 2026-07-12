@@ -257,7 +257,7 @@ Bot-authored PRs (actor login ends in `[bot]`) auto-pass with no override, since
 no human is present to apply one. A human bypasses with `override:pr-quality`
 plus a `## Override rationale` section, mirroring the issue override. The
 consumer workflow lives in
-[`templates/pr-workflow.yml`](templates/pr-workflow.yml) and needs
+[`templates/workflow/pr-quality.yml`](templates/workflow/pr-quality.yml) and needs
 `permissions: pull-requests: write`.
 
 Before opening a PR, run the same structural checks on a draft body file with
@@ -287,5 +287,14 @@ to resolve `closingIssuesReferences`). Exits non-zero on hard errors.
 
 Structure and rules both live in `src/rules.js` (the ordered field descriptor
 plus the constraints), read at runtime; the Issue Form YAML is a drift-checked
-rendering of that structure. [`CONTEXT.md`](CONTEXT.md) is the domain glossary:
+rendering of that structure.
+
+`templates/` is the canonical bundle `init` copies into every consumer:
+`templates/form/task.yml` (the Issue Form) and `templates/workflow/{issue,pr}-quality.yml`
+(the thin workflows). This repo's own `.github/` is a dogfood instance of that
+bundle: the applied Issue Form is drift-tested byte-identical to the canonical
+one, and each dogfood workflow is drift-tested to agree with its consumer
+template on every shared field (they differ only on `uses: ./` vs `@main`).
+
+[`CONTEXT.md`](CONTEXT.md) is the domain glossary:
 Issue Form, structure, field, section, rule, check, scorecard, override.
