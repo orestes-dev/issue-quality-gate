@@ -67,6 +67,7 @@ test("init warns and still scaffolds when cwd is not a git root", () => {
       existsSync(join(dir, ".github", "workflows", "issue-quality.yml")),
     );
     assert.ok(existsSync(join(dir, PR_FORM)));
+    assert.ok(existsSync(join(dir, ".template.pr.md")));
     assert.ok(existsSync(join(dir, PR_WORKFLOW)));
   });
 });
@@ -77,7 +78,7 @@ test("init prints the Suggested rule naming both Forms and validate-pr, writing 
     assert.equal(status, 0);
     assert.match(stdout, /Suggested rule/);
     assert.match(stdout, /\.template\.issue\.md/);
-    assert.match(stdout, /PULL_REQUEST_TEMPLATE\.md/);
+    assert.match(stdout, /\.template\.pr\.md/);
     assert.match(stdout, /\bvalidate\b/);
     assert.match(stdout, /validate-pr/);
     // Stdout-only: no rules file is written into the repo.

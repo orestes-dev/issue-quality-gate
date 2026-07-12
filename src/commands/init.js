@@ -1,6 +1,6 @@
-// `init`: scaffold the Issue Form + PR Form, the issue Author guide, and their
-// thin workflows into the current repo, upgrade drifted copies in place under
-// `--force`, and print the Suggested rule to stdout (written to no file).
+// `init`: scaffold the Issue Form + PR Form, the issue and PR Author guides, and
+// their thin workflows into the current repo, upgrade drifted copies in place
+// under `--force`, and print the Suggested rule to stdout (written to no file).
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -9,10 +9,13 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..");
 
-// `templates/` is the canonical bundle for the Issue Form and both workflows;
-// this repo's `.github/` copies are a dogfood instance drift-checked to match it
-// (ADR 0003). The Markdown PR Form is still sourced from `.github/` until its
-// Author-guide slice folds it into the bundle too.
+// `templates/` is the canonical bundle for both Forms and workflows; this repo's
+// `.github/` copies and root `.template.*.md` guides are a dogfood instance
+// drift-checked to match it (ADR 0003). The canonical Markdown PR Form is
+// `templates/markdown/pr.md`; `init` writes it byte-for-byte to both the
+// GitHub-rendered `.github/PULL_REQUEST_TEMPLATE.md` and the agent-facing root
+// `.template.pr.md`. Because the two are identical bytes, PR authoring guidance
+// stays in HTML comments so it never prints into the posted PR body (ADR 0003).
 const TEMPLATES = [
   {
     // Consumer's copy is UI-only; the gate reads structure from its own checkout.
@@ -30,9 +33,15 @@ const TEMPLATES = [
     to: join(".github", "workflows", "issue-quality.yml"),
   },
   {
-    // Markdown PR Form: both the GitHub rendering and the agent-facing one.
-    from: join(ROOT, ".github", "PULL_REQUEST_TEMPLATE.md"),
+    // Markdown PR Form, GitHub rendering: GitHub posts it as the PR body.
+    from: join(ROOT, "templates", "markdown", "pr.md"),
     to: join(".github", "PULL_REQUEST_TEMPLATE.md"),
+  },
+  {
+    // PR Author guide: the same bytes at the consumer root under a non-reserved
+    // name GitHub ignores, the path the Suggested rule points agents at.
+    from: join(ROOT, "templates", "markdown", "pr.md"),
+    to: ".template.pr.md",
   },
   {
     from: join(ROOT, "templates", "workflow", "pr-quality.yml"),
@@ -61,8 +70,8 @@ prints this and writes it nowhere):
 
       npx github:orestes-dev/quality-gate validate <body-file> --title "<title>"
 
-  When opening a pull request, fill every required section of the PR Form
-  (.github/PULL_REQUEST_TEMPLATE.md) — Summary, Verification, Divergence — then
+  When opening a pull request, follow the PR Author guide (.template.pr.md) to
+  fill every required section — Summary, Verification, Divergence — then
   pre-flight validate the drafted body before \`gh pr create\`:
 
       npx github:orestes-dev/quality-gate validate-pr <body-file> --title "<title>"
