@@ -1,18 +1,13 @@
 // Deterministic, dependency-free validator. The issue body is parsed with plain
 // string ops (no regex) into `### <label>` sections.
 
-import {
-  RULES,
-  NO_RESPONSE,
-  LABEL,
-  STATUS,
-  OVERRIDE_HEADING,
-} from "./schema.js";
+import { RULES, CONVENTIONAL_COMMIT_TYPES } from "./rules.js";
+import { NO_RESPONSE, LABEL, STATUS, OVERRIDE_HEADING } from "./constants.js";
 import { loadForm } from "./form.js";
 
 /**
  * @typedef {import('./form.js').Field} Field
- * @typedef {import('./schema.js').Rule} Rule
+ * @typedef {import('./rules.js').Rule} Rule
  */
 
 /**
@@ -47,6 +42,12 @@ const KNOWN_HEADINGS = new Set([
   ...FIELDS.map((f) => f.label),
   OVERRIDE_HEADING,
 ]);
+
+// A title must open with a Conventional Commits type, an optional `(scope)`, an
+// optional `!` breaking-change marker, then `: ` and a non-empty summary.
+const CONVENTIONAL_TITLE = new RegExp(
+  `^(${CONVENTIONAL_COMMIT_TYPES.join("|")})(\\([^)]+\\))?!?: .+`,
+);
 
 /**
  * The heading text of a markdown h2/h3 line (`## ` or `### `).
@@ -242,14 +243,23 @@ function checkField(sections, field, rule) {
   const { id, label, required, type } = field;
   const value = fieldValue(sections, label);
   if (value === "") {
-    if (!required)
-      return check(id, label, STATUS.PASS, "optional; not provided");
-    return check(
-      id,
-      label,
-      STATUS.FAIL,
-      type === "dropdown" ? "missing" : "missing or empty",
-    );
+    if (required) {
+      return check(
+        id,
+        label,
+        STATUS.FAIL,
+        type === "dropdown" ? "missing" : "missing or empty",
+      );
+    }
+    if (rule?.warnIfEmpty) {
+      return check(
+        id,
+        label,
+        STATUS.WARN,
+        "recommended; add it so implementers aren't left guessing",
+      );
+    }
+    return check(id, label, STATUS.PASS, "optional; not provided");
   }
   if (type === "dropdown") return checkEnum(field, rule, value);
   if (rule?.checklist) return checkChecklist(field, rule, value);
@@ -257,16 +267,41 @@ function checkField(sections, field, rule) {
 }
 
 /**
+ * Title: a Conventional Commits `type(scope): summary`, so it maps onto the
+ * eventual branch/commit. Metadata, not a form field, so it's checked here and
+ * prepended to the scorecard rather than derived from the form structure. Hard.
+ * @param {string} title - The issue title.
+ * @returns {Check}
+ */
+export function checkTitle(title) {
+  const value = String(title ?? "").trim();
+  if (value === "") return check("title", "Title", STATUS.FAIL, "missing");
+  if (!CONVENTIONAL_TITLE.test(value)) {
+    return check(
+      "title",
+      "Title",
+      STATUS.FAIL,
+      "must follow Conventional Commits: `type(scope): summary`",
+    );
+  }
+  return check("title", "Title", STATUS.PASS, value);
+}
+
+/**
  * Validate a body against the form-derived structure joined to RULES. Returns a
- * per-check scorecard, one line per field in form order.
+ * per-check scorecard, one line per field in form order. When `title` is given
+ * (CI always passes it; the CLI only when `--title` is supplied), a title check
+ * is prepended so the scorecard leads with it.
  * @param {string} body
+ * @param {string} [title] - The issue title, or undefined to skip the check.
  * @returns {Scorecard}
  */
-export function validate(body) {
+export function validate(body, title) {
   const sections = parseSections(body);
   const checks = FIELDS.map((field) =>
     checkField(sections, field, RULES[field.id]),
   );
+  if (title !== undefined) checks.unshift(checkTitle(title));
   return { checks };
 }
 

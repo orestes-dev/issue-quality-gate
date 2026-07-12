@@ -1,8 +1,7 @@
 // Gate core: validates an issue body, reconciles the mutually-exclusive quality
 // labels, and keeps a single bot comment in sync. Every write is diff-based, so
 // a re-run in the correct state writes nothing and the label triggers do not
-// loop. The process entry that feeds this from the CI environment lives in
-// `commands/action.js`.
+// loop.
 
 import {
   validate,
@@ -19,7 +18,7 @@ import {
   COMMENT_MARKER,
   OVERRIDE_LABEL,
   OVERRIDE_HEADING,
-} from "./schema.js";
+} from "./constants.js";
 
 /** @typedef {import('./validator.js').Scorecard} Scorecard */
 /** @typedef {import('./github.js').GitHub} GitHub */
@@ -117,7 +116,7 @@ export async function run({ gh, event }) {
     return `issue #${issue.number}: overridden`;
   }
 
-  const result = validate(body);
+  const result = validate(body, issue.title);
 
   // Override signalled but incomplete: nudge the author, as a warning line.
   if (currentLabels.includes(OVERRIDE_LABEL) && !hasOverrideRationale(body)) {

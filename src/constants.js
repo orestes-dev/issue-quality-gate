@@ -1,25 +1,6 @@
-// The RULES the gate enforces plus the fixed labels/statuses. STRUCTURE lives in
-// the Issue Form and is derived by `form.js`; this module owns only what the
-// form can't express, keyed by field `id`.
-
-/**
- * A constraint the Issue Form can't express, keyed by field `id`.
- * @typedef {object} Rule
- * @property {number} [minLength] - Prose length floor (hard).
- * @property {number} [maxLength] - Prose length ceiling (warning).
- * @property {boolean} [checklist] - Field must be a markdown checklist.
- * @property {number} [minItems] - Minimum non-empty checklist items.
- * @property {string[]} [blocking] - Dropdown options too big to land as one issue.
- */
-
-// Every number is restated in the README and guarded by a drift test.
-/** @type {Record<string, Rule>} */
-export const RULES = {
-  context: { minLength: 30, maxLength: 1500 },
-  "acceptance-criteria": { checklist: true, minItems: 1 },
-  "out-of-scope": { minLength: 10 },
-  size: { blocking: ["L", "XL"] },
-};
+// The gate's internal constants: labels, statuses, and the markers/headings the
+// action keys off. The enforced RULES and title format are a separate tuning
+// surface; STRUCTURE lives in the Issue Form.
 
 // GitHub renders an empty optional field as this literal. Treat it as absent.
 export const NO_RESPONSE = "_No response_";

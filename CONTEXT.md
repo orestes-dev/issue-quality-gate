@@ -12,14 +12,17 @@ _Avoid_: Template (ambiguous with workflow template), schema.
 The set of **fields** an issue must contain and their shape: each field's id, heading, whether it is required, and any enumerated options. Owned entirely by the Issue Form and read from it at runtime.
 
 **Field**:
-One input in the Issue Form, identified by a stable `id` and rendered in the submitted body as a `### <heading>` **section**. The four fields are Context, Acceptance Criteria, Out of Scope, and Size.
+One input in the Issue Form, identified by a stable `id` and rendered in the submitted body as a `### <heading>` **section**. The fields are Context, Acceptance Criteria, Out of Scope, Decisions, Affected files / entry points, Depends on, and Size. Context, Acceptance Criteria, Out of Scope, and Size are required; Decisions and Affected files are optional but warn when empty; Depends on is purely optional.
 _Avoid_: Question, item.
+
+**Title**:
+The issue's one-line summary, validated (not a field, since the form doesn't own it) against the Conventional Commits format `type(scope): summary`. It leads the scorecard so the change type reads first and maps onto the eventual branch/commit.
 
 **Section**:
 A `### <heading>` block in a submitted issue body. GitHub renders each field's heading as the section heading; the validator parses sections back out to check them. A section is the rendered form of a field.
 
 **Rule**:
-A constraint applied to a field that the Issue Form cannot express: minimum/maximum length, checklist-item requirement, or which sizes are too large to land. Owned by `schema.js`, keyed by field `id`, and joined to the structure at runtime.
+A constraint applied to a field that the Issue Form cannot express: minimum/maximum length, checklist-item requirement, warn-if-empty on an optional field, or which sizes are too large to land. Owned by `rules.js`, keyed by field `id`, and joined to the structure at runtime.
 _Avoid_: Validation, constraint, config.
 
 **Check**:
@@ -51,7 +54,7 @@ A restatement deliberately left in place because collapsing it costs more than i
 
 **Dev**: If the Issue Form owns the structure, where does "Context must be at least 30 characters" live?
 
-**Domain expert**: That's a rule, not structure. The form only says Context is a required field; the 30-character floor is a rule in `schema.js`, keyed to the Context field's id. We join the two at runtime.
+**Domain expert**: That's a rule, not structure. The form only says Context is a required field; the 30-character floor is a rule in `rules.js`, keyed to the Context field's id. We join the two at runtime.
 
 **Dev**: And if someone renames the Context field's heading in the form?
 
