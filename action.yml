@@ -4,6 +4,13 @@ description: >-
   issue-quality:failing/warning/pass label and
   posts/updates an explanatory scorecard comment.
 author: Orestes Carracedo
+inputs:
+  object:
+    description: >-
+      Which gate to run: `issue` (advisory) or `pr` (hard-fails CI). Selects the
+      command entry point behind the shared core.
+    required: false
+    default: issue
 runs:
   using: composite
   steps:
@@ -33,8 +40,11 @@ runs:
       shell: bash
       working-directory: ${{ github.action_path }}
       run: yarn install --immutable
-    - name: Validate issue
+    # One composite action, two entry points: the `object` input selects the
+    # command file (issue -> action.js, pr -> pr.js) behind the shared core.
+    - name: Run quality gate
       shell: bash
-      run: node "$GITHUB_ACTION_PATH/src/commands/action.js"
+      run: node "$GITHUB_ACTION_PATH/src/commands/${COMMAND}.js"
       env:
         GITHUB_TOKEN: ${{ github.token }}
+        COMMAND: ${{ inputs.object == 'pr' && 'pr' || 'action' }}

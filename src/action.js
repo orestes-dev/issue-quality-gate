@@ -8,7 +8,7 @@
 
 import { hasOverrideRationale, worstStatus } from "./validator.js";
 import { renderComment } from "./report.js";
-import { STATUS } from "./constants.js";
+import { STATUS, EXEMPT_CHECK } from "./constants.js";
 import { issueGate } from "./gates/issue.js";
 
 /** @typedef {import('./validator.js').Scorecard} Scorecard */
@@ -23,6 +23,8 @@ import { issueGate } from "./gates/issue.js";
  * @property {string} [title]
  * @property {string} [body]
  * @property {Array<string|{name: string}>} [labels]
+ * @property {string} [author] - Login of the object's author (PRs only), so a
+ *   gate can exempt bot authors.
  */
 
 /**
@@ -46,6 +48,16 @@ import { issueGate } from "./gates/issue.js";
  *   Fetch the object fresh from the API (the event payload can be stale).
  * @property {(object: GatedObject) => Scorecard} validate - The structure
  *   provider: validate a fetched object into a scorecard.
+ * @property {(object: GatedObject) => boolean} [exempt] - Optional predicate;
+ *   an exempt object auto-passes (PR bot authors) with no override needed.
+ */
+
+/**
+ * The outcome of a gate run.
+ * @typedef {object} GateResult
+ * @property {string} summary - A one-line status string for logging.
+ * @property {'pass'|'warn'|'fail'} status - The worst status; a hard-fail gate
+ *   fails CI on `fail`. Override and exempt runs resolve to `pass`.
  */
 
 /** @type {Record<'pass'|'warn'|'fail', 'PASS'|'WARNING'|'FAILING'>} */
@@ -141,7 +153,7 @@ async function syncComment(gh, gate, number, result, options = {}) {
  * @param {GitHub} params.gh
  * @param {object} params.event - The webhook event payload.
  * @param {Gate} [params.gate] - The object descriptor; defaults to the issue gate.
- * @returns {Promise<string>} A status string for logging.
+ * @returns {Promise<GateResult>} The run's summary and worst status.
  */
 export async function run({ gh, event, gate = issueGate }) {
   const number = gate.getNumber(event);
@@ -156,6 +168,19 @@ export async function run({ gh, event, gate = issueGate }) {
     typeof l === "string" ? l : l.name,
   );
 
+  // Exemption: a bot-authored PR auto-passes with no override needed. Reconcile
+  // the pass label and post a single-line scorecard, diff-based like every other
+  // path so a re-run is a no-op.
+  if (gate.exempt?.(object)) {
+    const result = { checks: [{ ...EXEMPT_CHECK, status: STATUS.PASS }] };
+    await reconcileLabels(gh, gate, number, currentLabels, gate.labels.PASS);
+    await syncComment(gh, gate, number, result);
+    return {
+      summary: `${gate.name} #${number}: exempt (bot author)`,
+      status: STATUS.PASS,
+    };
+  }
+
   // Manual override: label plus a written rationale bypasses the gate. The
   // quality label is stripped (no machine verdict under override), but the
   // scorecard stays and leads with a banner acknowledging the bypass, so every
@@ -167,7 +192,10 @@ export async function run({ gh, event, gate = issueGate }) {
     await reconcileLabels(gh, gate, number, currentLabels, null);
     const result = gate.validate(object);
     await syncComment(gh, gate, number, result, { overridden: true });
-    return `${gate.name} #${number}: overridden`;
+    return {
+      summary: `${gate.name} #${number}: overridden`,
+      status: STATUS.PASS,
+    };
   }
 
   const result = gate.validate(object);
@@ -192,11 +220,17 @@ export async function run({ gh, event, gate = issueGate }) {
   const worst = worstStatus(result.checks);
   if (worst === STATUS.FAIL) {
     const fails = result.checks.filter((c) => c.status === STATUS.FAIL).length;
-    return `${gate.name} #${number}: failing (${fails} error(s))`;
+    return {
+      summary: `${gate.name} #${number}: failing (${fails} error(s))`,
+      status: STATUS.FAIL,
+    };
   }
   if (worst === STATUS.WARN) {
     const warns = result.checks.filter((c) => c.status === STATUS.WARN).length;
-    return `${gate.name} #${number}: warning (${warns} warning(s))`;
+    return {
+      summary: `${gate.name} #${number}: warning (${warns} warning(s))`,
+      status: STATUS.WARN,
+    };
   }
-  return `${gate.name} #${number}: passing`;
+  return { summary: `${gate.name} #${number}: passing`, status: STATUS.PASS };
 }

@@ -72,7 +72,7 @@ test("a fresh clean issue gets the pass label and a scorecard comment", async ()
     issue: { number: 7, body: goodBody, labels: [] },
     comments: [],
   });
-  const summary = await run({ gh, event });
+  const { summary } = await run({ gh, event });
   assert.match(summary, /passing/);
   assert.ok(
     gh.calls.some((c) => c[0] === "addLabels" && c[2].includes(LABEL.PASS)),
@@ -164,7 +164,7 @@ test("override with rationale strips the quality label and keeps an annotated sc
       },
     ],
   });
-  const summary = await run({ gh, event });
+  const { summary } = await run({ gh, event });
   assert.match(summary, /overridden/);
   assert.ok(
     gh.calls.some((c) => c[0] === "removeLabel" && c[2] === LABEL.FAILING),

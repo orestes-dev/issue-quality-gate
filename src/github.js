@@ -98,6 +98,24 @@ export class GitHub {
   }
 
   /**
+   * Fetch a pull request fresh from the API (title/body/labels are mutable, so
+   * the event payload can be stale). The `pulls` endpoint carries `user.login`;
+   * it is flattened to `author` so the gate's bot exemption can key off it.
+   * Label and comment writes still go through the shared issues endpoints, since
+   * every PR is also an issue with the same number.
+   * @param {number} prNumber
+   * @returns {Promise<Issue & {author: string}>} The PR resource.
+   */
+  async getPullRequest(prNumber) {
+    const res = await this.#request("GET", `${this.#base()}/pulls/${prNumber}`);
+    if (!res.ok) throw new Error(`Failed to fetch pull request: ${res.status}`);
+    const pr = /** @type {Issue & {user?: {login?: string}}} */ (
+      await res.json()
+    );
+    return { ...pr, author: pr.user?.login ?? "" };
+  }
+
+  /**
    * Create the label with its color/description if it doesn't exist.
    * @param {string} name
    * @param {string} color - Six-digit hex, no leading `#`.

@@ -33,7 +33,11 @@ export async function sweepIssues({ gh, log = () => {} }) {
   const failed = [];
   for (const item of items) {
     try {
-      log(await run({ gh, event: { issue: { number: item.number } } }));
+      const { summary } = await run({
+        gh,
+        event: { issue: { number: item.number } },
+      });
+      log(summary);
       swept += 1;
     } catch (err) {
       failed.push(item.number);

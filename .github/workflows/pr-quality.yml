@@ -1,0 +1,30 @@
+# Dogfood: run this repo's own PR gate against its own pull requests, using the
+# local action (`uses: ./`) rather than the published @main reference.
+name: PR Quality Gate
+on:
+  pull_request:
+    types: [opened, edited, reopened, labeled, unlabeled]
+permissions:
+  pull-requests: write
+  contents: read # actions/checkout via `uses: ./` needs it on private repos
+concurrency:
+  group: pr-quality-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    # See templates/pr-workflow.yml: content events always run; label events run
+    # only when a human touches the override or a pr-quality:* label, so the gate
+    # never re-triggers itself but manual quality-label edits self-heal.
+    if: >-
+      github.event.action == 'opened' ||
+      github.event.action == 'edited' ||
+      github.event.action == 'reopened' ||
+      (github.event.sender.login != 'github-actions[bot]' &&
+       (github.event.label.name == 'override:pr-quality' ||
+        startsWith(github.event.label.name, 'pr-quality:')))
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./
+        with:
+          object: pr

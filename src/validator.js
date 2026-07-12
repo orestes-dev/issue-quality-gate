@@ -88,11 +88,13 @@ function parseFence(line) {
 
 /**
  * Split a body into a { heading: text } map on the known headings, skipping any
- * heading inside a fenced code block.
+ * heading inside a fenced code block. The issue callers rely on the default
+ * heading set; the PR validator passes its own so the same parser serves both.
  * @param {string} body
+ * @param {Set<string>} [knownHeadings] - Headings that delimit a section.
  * @returns {Record<string, string>}
  */
-export function parseSections(body) {
+export function parseSections(body, knownHeadings = KNOWN_HEADINGS) {
   /** @type {Record<string, string>} */
   const sections = {};
   /** @type {string|null} */
@@ -133,7 +135,7 @@ export function parseSections(body) {
     }
 
     const heading = parseHeading(line);
-    if (heading !== null && KNOWN_HEADINGS.has(heading)) {
+    if (heading !== null && knownHeadings.has(heading)) {
       flush();
       current = heading;
       buffer = [];
@@ -194,7 +196,7 @@ function countChecklistItems(text) {
  * @param {string} message
  * @returns {Check}
  */
-const check = (key, label, status, message) => ({
+export const check = (key, label, status, message) => ({
   key,
   label,
   status,

@@ -39,7 +39,47 @@ export const LABEL_META = {
 // Manual escape hatch: this label plus a non-empty `## Override rationale`
 // section bypasses the gate.
 export const OVERRIDE_LABEL = "override:issue-quality";
+// Shared by both gates: the `## <heading>` a bypass rationale lives under.
 export const OVERRIDE_HEADING = "Override rationale";
 
 // Marker embedded in the bot comment so it can be found and updated in place.
 export const COMMENT_MARKER = "<!-- issue-quality-gate -->";
+
+// PR labels applied by the PR gate. Mutually exclusive, mirroring LABEL.
+export const PR_LABEL = {
+  FAILING: "pr-quality:failing",
+  WARNING: "pr-quality:warning",
+  PASS: "pr-quality:pass",
+};
+
+// Colors/descriptions so the PR gate creates its labels intentionally.
+export const PR_LABEL_META = {
+  [PR_LABEL.FAILING]: {
+    color: "d93f0b",
+    description: "PR has failing quality checks; merge is blocked",
+  },
+  [PR_LABEL.WARNING]: {
+    color: "fbca04",
+    description: "PR passes but has non-blocking quality warnings",
+  },
+  [PR_LABEL.PASS]: {
+    color: "0e8a16",
+    description: "PR meets all quality checks",
+  },
+};
+
+// PR manual escape hatch: this label plus a `## Override rationale` section
+// bypasses the PR gate for a human author (bots auto-pass without one).
+export const PR_OVERRIDE_LABEL = "override:pr-quality";
+
+// Distinct from COMMENT_MARKER so a PR (which is also an issue) can carry both
+// scorecards without either gate adopting the other's comment.
+export const PR_COMMENT_MARKER = "<!-- pr-quality-gate -->";
+
+// Scorecard line for an exempt object (a bot-authored PR): a single pass check,
+// so the gate still leaves a comment explaining why it did not enforce.
+export const EXEMPT_CHECK = {
+  key: "exempt",
+  label: "Author",
+  message: "bot-authored; gate exempt",
+};

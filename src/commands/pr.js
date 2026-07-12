@@ -1,12 +1,14 @@
-// CI process entry: build a GitHub client from the environment, load the
-// triggering webhook event, and run the gate core against it. Invoked directly
-// by `action.yml` (`node src/commands/action.js`); the pure logic lives in
-// `../action.js`.
+// CI process entry for the PR gate: build a GitHub client from the environment,
+// load the triggering `pull_request` event, and run the gate core with the PR
+// descriptor. Invoked by `action.yml` when its `object` input is `pr`. The PR
+// gate hard-fails, so a failing verdict exits non-zero and turns the check red.
 
 import { readFileSync } from "node:fs";
 
 import { GitHub } from "../github.js";
 import { run } from "../action.js";
+import { prGate } from "../gates/pr.js";
+import { STATUS } from "../constants.js";
 
 /**
  * Load the webhook event payload from `GITHUB_EVENT_PATH`.
@@ -20,7 +22,8 @@ function loadEvent() {
 }
 
 /**
- * Gate the issue named in the triggering event, logging the outcome.
+ * Gate the PR named in the triggering event, logging the outcome. Exits 1 on a
+ * failing verdict so the check blocks merge.
  * @returns {Promise<void>}
  */
 async function main() {
@@ -33,8 +36,13 @@ async function main() {
     owner,
     repo,
   });
-  const { summary } = await run({ gh, event: loadEvent() });
+  const { summary, status } = await run({
+    gh,
+    event: loadEvent(),
+    gate: prGate,
+  });
   console.log(summary);
+  if (prGate.hardFail && status === STATUS.FAIL) process.exit(1);
 }
 
 main().catch((err) => {
