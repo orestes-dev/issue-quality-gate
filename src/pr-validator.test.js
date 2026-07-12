@@ -381,12 +381,12 @@ test("a bot-authored PR auto-passes without an override, even with a bad body", 
 
 // --- drift: the Markdown template is pinned to the PR_SECTIONS descriptor ---
 
-// PR structure is defined in code (`PR_SECTIONS`); the Markdown template is a
-// rendering of it. This test pins the template's headings, their order, and the
-// per-section required flag (surfaced as the word "Required." in the guidance)
-// to the descriptor, so the two cannot drift apart.
-test("PULL_REQUEST_TEMPLATE.md headings and required flags match PR_SECTIONS", () => {
-  const template = read(".github/PULL_REQUEST_TEMPLATE.md");
+// PR structure is defined in code (`PR_SECTIONS`); the canonical Markdown PR Form
+// (`templates/markdown/pr.md`) is a rendering of it. This test pins the template's
+// headings, their order, and the per-section required flag (surfaced as the word
+// "Required." in the guidance) to the descriptor, so the two cannot drift apart.
+test("the canonical PR Form headings and required flags match PR_SECTIONS", () => {
+  const template = read("templates/markdown/pr.md");
   const headings = PR_SECTIONS.map((s) => `## ${s.heading}`);
   const positions = headings.map((h) => template.indexOf(h));
   positions.forEach((pos, i) => {
@@ -413,6 +413,32 @@ test("PULL_REQUEST_TEMPLATE.md headings and required flags match PR_SECTIONS", (
       );
     }
   }
+});
+
+// --- drift: the dogfood PR Form copies are byte-identical to the bundle ---
+
+// `init` writes the canonical PR Form to two consumer paths verbatim: the
+// GitHub-rendered `.github/PULL_REQUEST_TEMPLATE.md` and the agent-facing root
+// `.template.pr.md`. This repo's own two copies are its dogfood instance, so each
+// must stay byte-identical to the bundle or dogfooding drifts from consumers get.
+test("the dogfood .github PR Form is byte-identical to the templates bundle", () => {
+  assert.equal(
+    read(".github/PULL_REQUEST_TEMPLATE.md"),
+    read("templates/markdown/pr.md"),
+  );
+});
+
+test("the dogfood root PR Author guide is byte-identical to the templates bundle", () => {
+  assert.equal(read(".template.pr.md"), read("templates/markdown/pr.md"));
+});
+
+// The PR body GitHub posts and the guide the agent drafts against are the same
+// bytes, so authoring guidance can only live in HTML comments (ADR 0003).
+test("the GitHub PR Form and the root PR Author guide are byte-identical", () => {
+  assert.equal(
+    read(".template.pr.md"),
+    read(".github/PULL_REQUEST_TEMPLATE.md"),
+  );
 });
 
 // --- drift: the PR workflows stay coupled to the schema strings and each other ---

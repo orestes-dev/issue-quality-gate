@@ -108,7 +108,7 @@ ready labels explicitly.
 npx github:orestes-dev/quality-gate init
 ```
 
-Run from the repo root. This drops five files, which together are the opt-in:
+Run from the repo root. This drops six files, which together are the opt-in:
 
 - `.github/ISSUE_TEMPLATE/task.yml`: the Issue Form (GitHub-UI rendering of the
   `src/rules.js` structure, drift-checked against it).
@@ -116,12 +116,15 @@ Run from the repo root. This drops five files, which together are the opt-in:
   LLM-facing rendering of the same structure).
 - `.github/workflows/issue-quality.yml`: a thin workflow calling the shared
   Action at `@main` for the issue gate.
-- `.github/PULL_REQUEST_TEMPLATE.md`: the PR Form (required sections).
+- `.github/PULL_REQUEST_TEMPLATE.md`: the PR Form (required sections), the body
+  GitHub posts on a new PR.
+- `.template.pr.md`: the [PR Author guide](#the-pr-author-guide), byte-identical
+  to the PR Form, the path an agent drafts a PR body against.
 - `.github/workflows/pr-quality.yml`: a thin workflow calling the shared Action
   at `@main` for the PR gate (merge-blocking).
 
-Commit all five. `init` then prints a Suggested rule to stdout: an agent-guidance
-snippet pointing at the issue Author guide and the PR Form and naming the matching
+Commit all six. `init` then prints a Suggested rule to stdout: an agent-guidance
+snippet pointing at the issue and PR Author guides and naming the matching
 pre-flight `validate` / `validate-pr` step, for you to paste into your own
 agent-rules file (`AGENTS.md`, `CLAUDE.md`, editor rules). `init` writes it to no
 file, so it never clobbers a file it does not own.
@@ -135,6 +138,17 @@ not a reserved template path, so it never pollutes the new-issue chooser). It is
 rendering of the same `src/rules.js` structure as the Issue Form: only its
 headings and their order are drift-checked; its prose is deliberately richer and
 free to differ. The Suggested rule points agents at it.
+
+### The PR Author guide
+
+`.template.pr.md` is the LLM-facing companion to the PR Form, and unlike the issue
+Author guide it is byte-identical to the native template: `init` writes the one
+canonical `templates/markdown/pr.md` to both `.github/PULL_REQUEST_TEMPLATE.md`
+(the body GitHub posts) and root `.template.pr.md` (the path an agent drafts
+against), and a drift test keeps the two the same bytes. Because those bytes end
+up in the posted PR body, all authoring guidance lives in HTML comments so it
+never prints into the PR (ADR 0003). GitHub ignores `.template.pr.md` (the name is
+not a reserved template path). The Suggested rule points agents at it.
 
 Re-running `init` later is safe: unchanged files are left alone. If a bundled
 template has moved on and your copy is stale (or you edited it locally), `init`
@@ -303,12 +317,14 @@ rendering of that structure.
 
 `templates/` is the canonical bundle `init` copies into every consumer:
 `templates/form/task.yml` (the Issue Form), `templates/markdown/issue.md` (the
-issue Author guide), and `templates/workflow/{issue,pr}-quality.yml` (the thin
-workflows). This repo's own `.github/` and root `.template.issue.md` are a
-dogfood instance of that bundle: the applied Issue Form and Author guide are
-drift-tested byte-identical to the canonical ones, and each dogfood workflow is
-drift-tested to agree with its consumer template on every shared field (they
-differ only on `uses: ./` vs `@main`).
+issue Author guide), `templates/markdown/pr.md` (the PR Form, written to both the
+GitHub template path and the root PR Author guide), and
+`templates/workflow/{issue,pr}-quality.yml` (the thin workflows). This repo's own
+`.github/` and root `.template.{issue,pr}.md` are a dogfood instance of that
+bundle: the applied Forms and Author guides are drift-tested byte-identical to the
+canonical ones, and each dogfood workflow is drift-tested to agree with its
+consumer template on every shared field (they differ only on `uses: ./` vs
+`@main`).
 
 [`CONTEXT.md`](CONTEXT.md) is the domain glossary:
 Issue Form, structure, field, section, rule, check, scorecard, override.
