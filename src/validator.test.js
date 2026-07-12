@@ -339,15 +339,15 @@ test("RULES keys are exactly the FIELDS ids", () => {
 
 // --- drift: task.yml is a rendering of the FIELDS descriptor ---
 
-// Structure lives in code (`FIELDS`); `.github/ISSUE_TEMPLATE/task.yml` is the
-// GitHub-UI rendering of it, read only by GitHub and this test, never at
+// Structure lives in code (`FIELDS`); the canonical `templates/form/task.yml` is
+// the GitHub-UI rendering of it, read only by GitHub and this test, never at
 // runtime. This pins the YAML's input fields (heading, order, required, options)
 // to the descriptor so the two cannot drift apart. Its `description` prose is
 // deliberately richer than the code and is not compared.
 const INPUT_TYPES = new Set(["input", "textarea", "dropdown"]);
 
 test("task.yml headings, order, required, and options match FIELDS", () => {
-  const doc = parse(read(".github/ISSUE_TEMPLATE/task.yml"));
+  const doc = parse(read("templates/form/task.yml"));
   const rendered = doc.body
     .filter((el) => el && INPUT_TYPES.has(el.type))
     .map((el) => ({
@@ -365,6 +365,21 @@ test("task.yml headings, order, required, and options match FIELDS", () => {
     options: f.options,
   }));
   assert.deepEqual(rendered, expected);
+});
+
+// --- dogfood drift: this repo's applied Issue Form equals the bundle ---
+
+// `templates/form/task.yml` is canonical; `init` copies it verbatim into every
+// consumer. This repo's own `.github/ISSUE_TEMPLATE/task.yml` is one such applied
+// copy (the dogfood), so it must stay byte-identical to the bundle — else what we
+// gate ourselves with silently diverges from what `init` ships. The workflows
+// legitimately differ (`uses: ./` vs `@main`) and are guarded separately; the
+// Issue Form is copied with no edits, so exact equality is the right check.
+test("the dogfood .github Issue Form is byte-identical to the templates bundle", () => {
+  assert.equal(
+    read(".github/ISSUE_TEMPLATE/task.yml"),
+    read("templates/form/task.yml"),
+  );
 });
 
 // The README restates the rules as the human-readable bar. That is accepted

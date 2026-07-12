@@ -9,14 +9,18 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..");
 
+// `templates/` is the canonical bundle for the Issue Form and both workflows;
+// this repo's `.github/` copies are a dogfood instance drift-checked to match it
+// (ADR 0003). The Markdown PR Form is still sourced from `.github/` until its
+// Author-guide slice folds it into the bundle too.
 const TEMPLATES = [
   {
     // Consumer's copy is UI-only; the gate reads structure from its own checkout.
-    from: join(ROOT, ".github", "ISSUE_TEMPLATE", "task.yml"),
+    from: join(ROOT, "templates", "form", "task.yml"),
     to: join(".github", "ISSUE_TEMPLATE", "task.yml"),
   },
   {
-    from: join(ROOT, "templates", "workflow.yml"),
+    from: join(ROOT, "templates", "workflow", "issue-quality.yml"),
     to: join(".github", "workflows", "issue-quality.yml"),
   },
   {
@@ -25,7 +29,7 @@ const TEMPLATES = [
     to: join(".github", "PULL_REQUEST_TEMPLATE.md"),
   },
   {
-    from: join(ROOT, "templates", "pr-workflow.yml"),
+    from: join(ROOT, "templates", "workflow", "pr-quality.yml"),
     to: join(".github", "workflows", "pr-quality.yml"),
   },
 ];
