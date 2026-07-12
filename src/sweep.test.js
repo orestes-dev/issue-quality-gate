@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { sweep, buildQuery } from "./sweep.js";
+import { sweepIssues, buildQuery } from "./sweep.js";
 import { LABEL } from "./schema.js";
 import { goodBody } from "./fixtures.js";
 
@@ -57,7 +57,7 @@ test("sweep labels each matched issue by its validated outcome", async () => {
     },
     search: { totalCount: 2, items: [{ number: 1 }, { number: 2 }] },
   });
-  const result = await sweep({ gh });
+  const result = await sweepIssues({ gh });
   assert.equal(result.swept, 2);
   assert.deepEqual(result.failed, []);
   assert.equal(result.capped, false);
@@ -85,7 +85,7 @@ test("sweep continues past a failing issue and reports it", async () => {
     },
     throwOn: 2,
   });
-  const result = await sweep({ gh });
+  const result = await sweepIssues({ gh });
   assert.equal(result.swept, 2);
   assert.deepEqual(result.failed, [2]);
   assert.ok(
@@ -99,7 +99,7 @@ test("sweep flags a capped result when more issues match than were fetched", asy
     issues: { 1: { body: goodBody, labels: [] } },
     search: { totalCount: 1500, items: [{ number: 1 }] },
   });
-  const result = await sweep({ gh });
+  const result = await sweepIssues({ gh });
   assert.equal(result.capped, true);
 });
 
@@ -109,6 +109,6 @@ test("sweep passes the running summary to its log callback", async () => {
     issues: { 1: { body: goodBody, labels: [] } },
     search: { totalCount: 1, items: [{ number: 1 }] },
   });
-  await sweep({ gh, log: (l) => lines.push(l) });
+  await sweepIssues({ gh, log: (l) => lines.push(l) });
   assert.ok(lines.some((l) => /issue #1: passing/.test(l)));
 });

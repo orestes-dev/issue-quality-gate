@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 
 import { GitHub } from "../github.js";
-import { sweep as runSweep } from "../sweep.js";
+import { sweepIssues } from "../sweep.js";
 
 /**
  * Run a `gh` CLI command, exiting with a hint on failure. `sweep` runs locally,
@@ -44,7 +44,7 @@ export async function sweep() {
     repo: name,
   });
 
-  const { swept, failed, totalCount, capped } = await runSweep({
+  const { swept, failed, totalCount, capped } = await sweepIssues({
     gh: client,
     log: (line) => console.log(line),
   });
