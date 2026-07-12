@@ -76,6 +76,27 @@ leads with a banner acknowledging the bypass, so the record of what the gate
 found survives the override. The label without a rationale does not bypass; it
 raises a warning to write one.
 
+## Consuming the gate's output
+
+The labels are a filterable signal for downstream automation (or a saved search).
+An issue is **ready for pickup** when the gate cleared it or a human waived the
+block: `issue-quality:pass`, `issue-quality:warning` (non-blocking by design), or
+`override:issue-quality`. Query readiness as a positive union of those labels:
+
+```text
+is:issue is:open label:issue-quality:pass,issue-quality:warning,override:issue-quality
+```
+
+GitHub OR's comma-separated `label:` terms, so this matches any of the three.
+Filter to only pristine issues by dropping the last two terms; that is a
+stricter-than-ready policy a consumer opts into, not the default meaning of ready.
+
+Do **not** express readiness as `-label:issue-quality:failing`. The negative form
+also matches issues the gate never evaluated (opened before CI ran, a repo not
+opted in, a run still in flight), which carry no quality label at all. Readiness
+requires an affirmative signal that the gate reached a verdict, so always list the
+ready labels explicitly.
+
 ## Opting a repo in
 
 ```sh

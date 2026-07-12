@@ -36,7 +36,10 @@ _Avoid_: Report (reserved for the CLI's terminal output), comment.
 Exactly one of `issue-quality:pass` / `issue-quality:warning` / `issue-quality:failing`, mutually exclusive, reflecting the worst check outcome. The gate's machine-readable verdict.
 
 **Override**:
-The manual escape hatch: the `override:issue-quality` label plus a written `## Override rationale` section bypasses the gate. Neither alone suffices. It strips the quality label but not the scorecard, which stays with a banner acknowledging the bypass.
+The manual escape hatch: the `override:issue-quality` label plus a written `## Override rationale` section bypasses the gate. Neither alone suffices. It strips the quality label but not the scorecard, which stays with a banner acknowledging the bypass. The `override:issue-quality` label itself is human-applied and the gate never removes it, so it persists as a durable, filterable signal.
+
+**Readiness**:
+Whether an issue is cleared for a consumer (human or automation) to pick up. Distinct from the **Quality Label**: readiness is "not blocked," the label is the gate's verdict on a single issue. An issue is ready when it carries `issue-quality:pass`, `issue-quality:warning` (non-blocking by design), or `override:issue-quality` (a human waived the block). `issue-quality:failing` and an issue with no quality label at all (un-gated, or the run is in flight) are not ready. Consumers express readiness as a positive union of the ready labels, never as the absence of `failing`, which would sweep in un-gated issues.
 
 **Sweep**:
 A local, on-demand backfill that applies quality labels and scorecards across a repo's existing open issues, using the operator's own `gh` session rather than CI credentials.
