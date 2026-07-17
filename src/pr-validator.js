@@ -16,10 +16,10 @@ import {
 /** @typedef {import('./validator.js').Scorecard} Scorecard */
 /** @typedef {import('./github.js').LinkedIssue} LinkedIssue */
 
-// A linked issue is "ready" (per CONTEXT.md Readiness) when it carries any of
-// these labels: the positive pass/warning/override union, never the mere absence
-// of `failing` (which would sweep in un-gated issues).
-const READY_LABELS = [LABEL.PASS, LABEL.WARNING, OVERRIDE_LABEL];
+// A linked issue is "gate-cleared" (per CONTEXT.md Gate clearance) when it
+// carries any of these labels: the positive pass/warning/override union, never
+// the mere absence of `failing` (which would sweep in un-gated issues).
+const CLEARED_LABELS = [LABEL.PASS, LABEL.WARNING, OVERRIDE_LABEL];
 
 /**
  * The checkbox label an author checks to flag a Divergence. Its exact text is
@@ -180,20 +180,20 @@ function checkDivergence(sections, { heading, flag = "" }) {
   return check(key, heading, STATUS.PASS, "flagged with rationale");
 }
 
-/** The scorecard key/label for the transitive linked-issue readiness check. */
+/** The scorecard key/label for the transitive linked-issue clearance check. */
 const LINKED_KEY = "linked-issues";
 const LINKED_LABEL = "Linked issues";
 
 /**
- * Whether a linked issue carries a ready label (pass/warning/override union).
+ * Whether a linked issue carries a gate-cleared label (pass/warning/override union).
  * @param {LinkedIssue} issue
  * @returns {boolean}
  */
-const isIssueReady = (issue) =>
-  issue.labels.some((name) => READY_LABELS.includes(name));
+const isIssueCleared = (issue) =>
+  issue.labels.some((name) => CLEARED_LABELS.includes(name));
 
 /**
- * A trailing note about cross-repo links, which are ignored for readiness (the
+ * A trailing note about cross-repo links, which are ignored for clearance (the
  * workflow token cannot reliably read another repo's labels). Empty when there
  * are none, so the scorecard says so rather than passing silently.
  * @param {LinkedIssue[]} crossRepo
@@ -202,14 +202,14 @@ const isIssueReady = (issue) =>
 function crossRepoNote(crossRepo) {
   if (crossRepo.length === 0) return "";
   const plural = crossRepo.length === 1 ? "" : "s";
-  return ` (${crossRepo.length} cross-repo link${plural} ignored for readiness)`;
+  return ` (${crossRepo.length} cross-repo link${plural} ignored for clearance)`;
 }
 
 /**
- * Transitive readiness check: every same-repo linked issue must be ready, and a
- * PR must close at least one same-repo issue (each is a spec it claims to
+ * Transitive clearance check: every same-repo linked issue must be gate-cleared,
+ * and a PR must close at least one same-repo issue (each is a spec it claims to
  * satisfy). Cross-repo links are ignored but noted. Hard error on zero links or
- * any not-ready issue; the check re-runs only on PR events, so a failure hints
+ * any not-cleared issue; the check re-runs only on PR events, so a failure hints
  * at re-running once a linked issue is fixed (`docs/adr/0002`).
  * @param {LinkedIssue[]} linkedIssues
  * @returns {Check}
@@ -225,14 +225,14 @@ function checkLinkedIssues(linkedIssues) {
       `no same-repo linked issue; link the issue(s) this PR closes with \`Closes #N\`${note}`,
     );
   }
-  const notReady = sameRepo.filter((i) => !isIssueReady(i));
-  if (notReady.length > 0) {
-    const list = notReady.map((i) => `#${i.number}`).join(", ");
+  const notCleared = sameRepo.filter((i) => !isIssueCleared(i));
+  if (notCleared.length > 0) {
+    const list = notCleared.map((i) => `#${i.number}`).join(", ");
     return check(
       LINKED_KEY,
       LINKED_LABEL,
       STATUS.FAIL,
-      `not ready: ${list}; every linked issue must pass, warn, or be overridden before merge. If you've since fixed them, re-run this check.${note}`,
+      `not gate-cleared: ${list}; every linked issue must pass, warn, or be overridden before merge. If you've since fixed them, re-run this check.${note}`,
     );
   }
   const plural = sameRepo.length === 1 ? "" : "s";
@@ -240,7 +240,7 @@ function checkLinkedIssues(linkedIssues) {
     LINKED_KEY,
     LINKED_LABEL,
     STATUS.PASS,
-    `${sameRepo.length} linked issue${plural} ready${note}`,
+    `${sameRepo.length} linked issue${plural} gate-cleared${note}`,
   );
 }
 
@@ -248,12 +248,12 @@ function checkLinkedIssues(linkedIssues) {
  * Validate a PR body and title into a scorecard: the Conventional Commits title
  * check leads, followed by one presence check per required section, the
  * Divergence conditional-rationale check, and, when `linkedIssues` is supplied,
- * the transitive readiness check. The CLI preflight omits `linkedIssues` (no PR
- * exists yet), so readiness is checked only in CI.
+ * the transitive clearance check. The CLI preflight omits `linkedIssues` (no PR
+ * exists yet), so clearance is checked only in CI.
  * @param {string} body - The PR description.
  * @param {string} [title] - The PR title; absent is treated as an empty (failing) title.
  * @param {LinkedIssue[]} [linkedIssues] - The PR's native linked issues, or
- *   undefined to skip the readiness check (CLI preflight).
+ *   undefined to skip the clearance check (CLI preflight).
  * @returns {Scorecard}
  */
 export function validatePr(body, title = "", linkedIssues) {

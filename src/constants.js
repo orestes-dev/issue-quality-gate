@@ -24,7 +24,7 @@ export const LABEL = {
 export const LABEL_META = {
   [LABEL.FAILING]: {
     color: "d93f0b",
-    description: "Issue has failing quality checks; not ready for pickup",
+    description: "Issue has failing quality checks; below the minimum structure and substance bar",
   },
   [LABEL.WARNING]: {
     color: "fbca04",

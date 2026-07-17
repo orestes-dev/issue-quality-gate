@@ -26,7 +26,7 @@ import { issueGate } from "./gates/issue.js";
  * @property {string} [author] - Login of the object's author (PRs only), so a
  *   gate can exempt bot authors.
  * @property {import('./github.js').LinkedIssue[]} [linkedIssues] - Native linked
- *   issues (PRs only), for the transitive readiness check.
+ *   issues (PRs only), for the transitive clearance check.
  */
 
 /**
