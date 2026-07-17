@@ -29,7 +29,7 @@ const SEARCH_MAX_PAGES = 10;
 /**
  * A linked issue a PR closes on merge, from GitHub's native
  * `closingIssuesReferences`. `sameRepo` is resolved here (against the client's
- * own owner/repo) so downstream readiness logic stays free of repo context.
+ * own owner/repo) so downstream clearance logic stays free of repo context.
  * @typedef {object} LinkedIssue
  * @property {number} number
  * @property {string} owner - The linked issue's repository owner login.
@@ -165,7 +165,7 @@ export class GitHub {
    * `closingIssuesReferences` (populated by `Closes #N` or the Development
    * sidebar), not a parsed body field. Each node's repository resolves
    * `sameRepo` against this client's owner/repo, and its labels ride along so a
-   * caller can judge readiness without a second round trip.
+   * caller can judge clearance without a second round trip.
    * @param {number} prNumber
    * @returns {Promise<LinkedIssue[]>}
    */

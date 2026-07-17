@@ -49,7 +49,7 @@ function cmdValidateIssue(args) {
  * on usage error. An optional `--title <title>` checks the title against the
  * Conventional Commits format. `validatePr` is called without linked issues, so
  * only what is knowable locally (body structure + title) is checked; transitive
- * linked-issue readiness stays CI-authoritative.
+ * linked-issue clearance stays CI-authoritative.
  * @param {string[]} args - Positional file path plus optional `--title <title>`.
  * @returns {void}
  */

@@ -1,6 +1,6 @@
 # Quality Gate
 
-A deterministic gate that scores GitHub **issues** and **pull requests** against a structural quality bar, labels each outcome, and posts a scorecard explaining it. It exists so work has a proper spec before anyone picks it up (the issue) and a proper report of how that spec was met (the PR). The **Issue gate** is advisory (labels + scorecard, never fails CI, since GitHub cannot block issue creation); the **PR gate** hard-fails CI (a red check blocks merge), and additionally requires the PR to descend from a ready issue. The two gates share one core: title check, scorecard, labels, override, presence/length rules, and the validator.
+A deterministic gate that scores GitHub **issues** and **pull requests** against a structural quality bar, labels each outcome, and posts a scorecard explaining it. It exists so work has a proper spec before anyone picks it up (the issue) and a proper report of how that spec was met (the PR). The **Issue gate** is advisory (labels + scorecard, never fails CI, since GitHub cannot block issue creation); the **PR gate** hard-fails CI (a red check blocks merge), and additionally requires the PR to descend from a gate-cleared issue. The two gates share one core: title check, scorecard, labels, override, presence/length rules, and the validator.
 
 ## Language
 
@@ -49,11 +49,12 @@ Exactly one of `issue-quality:pass` / `issue-quality:warning` / `issue-quality:f
 **Override**:
 The manual escape hatch: an `override:<gate>` label (`override:issue-quality` or `override:pr-readiness`) plus a written `## Override rationale` section bypasses that gate. Neither alone suffices. It strips the quality label but not the scorecard, which stays with a banner acknowledging the bypass. The override label is human-applied and the gate never removes it, so it persists as a durable, filterable signal. On the PR gate, a bot-authored PR (actor ends in `[bot]`) is exempt without an override, since no human is present to apply one.
 
-**Readiness**:
-Whether an issue is cleared for a consumer (human or automation) to pick up. Distinct from the **Quality Label**: readiness is "not blocked," the label is the gate's verdict on a single issue. An issue is ready when it carries `issue-quality:pass`, `issue-quality:warning` (non-blocking by design), or `override:issue-quality` (a human waived the block). `issue-quality:failing` and an issue with no quality label at all (un-gated, or the run is in flight) are not ready. Consumers express readiness as a positive union of the ready labels, never as the absence of `failing`, which would sweep in un-gated issues.
+**Gate clearance**:
+Whether an issue clears the gate's bar: it carries `issue-quality:pass`, `issue-quality:warning` (non-blocking by design), or `override:issue-quality` (a human waived the block). Clearance means the issue is *legible*, meeting a minimum of structure and substance to be worth documenting; it does **not** mean the design is settled or that the work is ready to implement, which is a separate downstream signal the gate has no opinion on. `issue-quality:failing` and an issue with no quality label at all (un-gated, or the run is in flight) are not cleared. Consumers express clearance as a positive union of the cleared labels, never as the absence of `failing`, which would sweep in un-gated issues.
+_Avoid_: Readiness, ready for pickup (the gate judges legibility, not readiness-to-implement; that word belongs to the consumer's own `ready-to-implement` signal).
 
 **Linked issue**:
-An issue a PR declares it closes, read from GitHub's native `closingIssuesReferences` (populated by `Closes #N` or the Development sidebar), the same relationship that auto-closes the issue on merge. The PR gate's notion of "connected," never a body field it parses. Only same-repo links count toward readiness; cross-repo links are ignored (the workflow token cannot read another repo's labels).
+An issue a PR declares it closes, read from GitHub's native `closingIssuesReferences` (populated by `Closes #N` or the Development sidebar), the same relationship that auto-closes the issue on merge. The PR gate's notion of "connected," never a body field it parses. Only same-repo links count toward the PR gate's clearance check; cross-repo links are ignored (the workflow token cannot read another repo's labels).
 _Avoid_: Referenced issue, mentioned issue (a bare `#N` mention that is not a closing reference is not a Linked issue).
 
 **Divergence**:
@@ -61,7 +62,7 @@ A declared departure of a PR's implementation from its Linked issue's original w
 _Avoid_: Deviation, scope change.
 
 **PR Readiness**:
-Whether a PR is cleared to merge by the gate. Distinct from **Readiness** (an issue property): a PR is ready when it has no error (its required sections are present, its title is conventional, and **every** same-repo Linked issue is itself ready), or a human waived the block with `override:pr-readiness` plus a rationale, or a bot authored it. Expressed as a passing (green) status **Check**, the merge-blocking signal; the `pr-readiness:*` label and scorecard are explanatory.
+Whether a PR is cleared to merge by the gate. Distinct from an issue's **Gate clearance**: a PR is ready when it has no error (its required sections are present, its title is conventional, and **every** same-repo Linked issue is itself gate-cleared), or a human waived the block with `override:pr-readiness` plus a rationale, or a bot authored it. Expressed as a passing (green) status **Check**, the merge-blocking signal; the `pr-readiness:*` label and scorecard are explanatory.
 
 **Suggested rule**:
 The agent-guidance snippet `init` prints to stdout (it does not write it to any file) for the operator to paste into their own agent-rules file (`AGENTS.md`, `CLAUDE.md`, editor rules). It tells an agent to follow the **Author guide** (`.template.issue.md` / `.template.pr.md`) and to pre-flight validate before opening the issue or PR. Kept out of the repo so `init` never clobbers a file it does not own. Names no subcommand, flag, or exit code, deferring to `--help`: a pasted copy is unreachable from here, so whatever it pins about the CLI surface strands its consumer when that surface moves.
@@ -98,11 +99,11 @@ A restatement deliberately left in place because collapsing it costs more than i
 
 **Dev**: A PR says `Closes #42`, but #42 is `issue-quality:failing`. The PR body is perfect. Does it merge?
 
-**Domain expert**: No. The PR gate hard-fails, and one of its errors is that every same-repo Linked issue must be ready. #42 isn't, so the check is red. A perfect PR body doesn't buy readiness for the spec it claims to satisfy.
+**Domain expert**: No. The PR gate hard-fails, and one of its errors is that every same-repo Linked issue must be gate-cleared. #42 isn't, so the check is red. A perfect PR body doesn't buy clearance for the spec it claims to satisfy.
 
 **Dev**: Then someone fixes #42 and it flips to pass. Does the PR go green on its own?
 
-**Domain expert**: No, and that's deliberate. The PR check only re-runs on PR events, so it goes stale. The scorecard tells the author to re-run it once the issue is ready, rather than us coupling the two gates. If they can't wait, `override:pr-readiness` plus a rationale is the escape hatch.
+**Domain expert**: No, and that's deliberate. The PR check only re-runs on PR events, so it goes stale. The scorecard tells the author to re-run it once the issue is gate-cleared, rather than us coupling the two gates. If they can't wait, `override:pr-readiness` plus a rationale is the escape hatch.
 
 **Dev**: The PR gate never asks whether the code actually matches #42's acceptance criteria?
 
