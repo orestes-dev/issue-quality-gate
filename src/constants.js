@@ -5,6 +5,11 @@
 // GitHub renders an empty optional field as this literal. Treat it as absent.
 export const NO_RESPONSE = "_No response_";
 
+// The committed, repo-root config file the package reads for enforcement
+// opt-outs. JSON so it parses with `JSON.parse` (no added dependency) and stays
+// `jq`-queryable. Absent means full enforcement with no opt-outs.
+export const CONFIG_FILENAME = ".quality-gate.json";
+
 /**
  * Per-check outcome, worst-wins across a field's rules.
  * @typedef {'pass'|'warn'|'fail'} Status
@@ -24,7 +29,8 @@ export const LABEL = {
 export const LABEL_META = {
   [LABEL.FAILING]: {
     color: "d93f0b",
-    description: "Issue has failing quality checks; below the minimum structure and substance bar",
+    description:
+      "Issue has failing quality checks; below the minimum structure and substance bar",
   },
   [LABEL.WARNING]: {
     color: "fbca04",
