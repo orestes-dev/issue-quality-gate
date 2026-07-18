@@ -314,6 +314,55 @@ It evaluates only what is knowable locally (section presence + title); it never
 attempts linked-issue readiness, which stays CI-authoritative (no PR exists yet
 to resolve `closingIssuesReferences`). Exits non-zero on hard errors.
 
+## Enforcement opt-outs
+
+Some enforcement (the shipped commit hooks) can be relaxed per repo through a
+committed `.quality-gate.json` at the repo root. It replaces the per-machine
+`git config hooks.*` flags, which were invisible, per-machine, and survived no
+clone (ADR 0002, orestes/dotfiles#52). An opt-out here is durable, shows up in a
+diff, and carries the reason it exists.
+
+The file is optional: with it absent, every check runs at full enforcement with
+no opt-outs. It is plain JSON, parsed with `JSON.parse` (no added dependency), so
+`jq` queries it directly:
+
+```json
+{
+  "overrides": {
+    "maxAllowedEmDashes": {
+      "value": 34,
+      "reason": "AGENTS.md is generated and contains 33"
+    },
+    "allowDefaultBranchCommits": {
+      "value": true,
+      "reason": "policy: direct commits to main are fine here"
+    }
+  }
+}
+```
+
+Keys:
+
+- **`overrides`**: a map from an opt-out key to an `{ "value", "reason" }`
+  object. Omit it (or the whole file) for full enforcement. Any other top-level
+  key is reserved: the file may grow to hold further package settings.
+- **`value`**: what the check keys off. A boolean for an on/off opt-out (e.g.
+  `allowDefaultBranchCommits`, `allowEmDashes`, `skipBranchNameCheck`), or a
+  number for a budget (e.g. `maxAllowedEmDashes`).
+- **`reason`**: required and non-empty. Why the opt-out exists. It is a data
+  field, not a comment, so a triggered check quotes it in its output (the em-dash
+  budget message, say, names the file that consumed the budget). An opt-out
+  missing a `reason` is a hard error, so a bypass is never silent.
+
+Query one reason on the shell:
+
+```sh
+jq -r '.overrides.maxAllowedEmDashes.reason' .quality-gate.json
+```
+
+The commit hooks that consume these opt-outs ship separately; this section
+documents the file they read.
+
 ## Notes
 
 - **`@main`, unpinned.** Consumers reference `orestes-dev/quality-gate@main`,
