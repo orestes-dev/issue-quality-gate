@@ -47,6 +47,13 @@ const TEMPLATES = [
     from: join(ROOT, "templates", "workflow", "pr-readiness.yml"),
     to: join(".github", "workflows", "pr-readiness.yml"),
   },
+  {
+    // Commit hygiene gate: the CI mirror of the repo-contract baseline. No new
+    // Form or guide; it reads the PR's commits and diff, not a body the author
+    // fills in.
+    from: join(ROOT, "templates", "workflow", "commit-hygiene.yml"),
+    to: join(".github", "workflows", "commit-hygiene.yml"),
+  },
 ];
 
 // A destination is `absent`, byte-identical (`ok`), or `drift` (stale upstream
