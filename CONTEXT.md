@@ -67,6 +67,42 @@ Whether a PR is cleared to merge by the gate. Distinct from an issue's **Gate cl
 **Commit hygiene**:
 Whether a PR's commits obey the repo-contract baseline the local git hooks enforce: every non-exempt commit subject is Conventional Commits, no em dashes are added on `*.md`/`*.mdx` lines in the diff, and the PR is not opened from the default branch. Checked by the commit-hygiene gate, which reads the PR's commits and diff (not a body the author fills in) and hard-fails CI on any un-relaxed violation. It is the CI **mirror** of the baseline, not a second definition of it: the point is legibility, not un-bypassability, so a red gate is always waivable by `override:commit-hygiene` plus a rationale, and each rule reads its per-repo opt-out from the committed `.quality-gate.json` the local hooks also consume (`skipConventionalCommits`, `maxAllowedEmDashes`, `allowEmDashes`, `allowDefaultBranchCommits`). A relaxed rule passes with a scorecard line quoting the recorded reason. On a different axis from **PR Readiness** (which scores the PR body and its linked issues); the two are separate namespaces so one override never waives the other.
 
+**Tiered enforcement**:
+The three-audience split of git-hook enforcement (dotfiles ADR 0002, orestes/dotfiles#52), the frame the rest of the hook vocabulary hangs off. **Tier 1**, agent-hygiene: personal-workflow guards (block `.claude/`, `.planning/`, `tmp/`; the branch-name convention check) that protect only the user's own machine, kept in personal dotfiles via `core.hooksPath` and never vendored. **Tier 2**, repo-contract: the Conventional Commits, em-dash, and no-default-branch rules every consumer must obey, including CI and contributors with no `~/.dotfiles`; owned by this repo, vendored by `init` as committed hooks, and mirrored on CI by the **Commit hygiene** gate. **Tier 3**, project checks (`yarn build`/`test`/`lint`, `gitleaks`): per-repo, dependency-bearing, chained via the **`.husky/local` chain** and guaranteed by environment provisioning rather than graceful degradation. quality-gate owns tier 2 only.
+_Avoid_: Level, layer.
+
+**Repo-contract hook**:
+A tier-2 committed git hook (`.husky/pre-commit`, `.husky/commit-msg`) encoding a rule of the baseline every consumer must obey. `init` ships them from `templates/husky/`; each depends only on POSIX sh, git, and jq (jq only when `.quality-gate.json` exists), never on `node_modules`, so it runs before `yarn install` in fresh worktrees, containers, and CI. Husky executes it with `sh -e`, so its body stays free of bashisms. Distinct from a tier-1 agent-hygiene hook, which lives in personal dotfiles and is never vendored.
+_Avoid_: Global hook, baseline hook (the baseline is the rule set; this is a vendored carrier of one tier-2 slice of it).
+
+**Vendored hook**:
+A repo-contract hook shipped into a consumer as a committed file rather than referenced from a shared location, so it survives environments where `~/.dotfiles` is absent (CI, containers, fresh worktrees) in which a `core.hooksPath` delegation would silently no-op. `init` writes each one byte-for-byte from `templates/husky/` (`classify()` reports `absent`/`ok`/`drift`, `--force` repairs a drifted copy); quality-gate owns it and drift-tests it, so a consumer edits the upstream template and re-runs `init` instead of patching in place. This repo's own `.husky/*` are its dogfood instance of the same bundle.
+_Avoid_: Committed hook (a synonym; prefer this term), linked hook, symlinked hook (the point is a self-contained copy, not a reference).
+
+**`.quality-gate.json`**:
+The committed, repo-root file holding a repo's enforcement opt-outs, replacing the per-machine `git config hooks.*` that ADR 0002 retired as invisible and clone-losing. Read by `src/config.js` (`JSON.parse`, no added parser, so it stays `jq`-queryable) and by the shipped hooks directly through jq. Its `overrides` map keys an opt-out (`skipConventionalCommits`, `allowEmDashes`, `maxAllowedEmDashes`, `allowDefaultBranchCommits`) to an `Override`: the `value` the check reads plus a required, non-empty `reason`. An absent file means full enforcement with no opt-outs, so a repo that never wrote it behaves exactly as before. The same file feeds the **Commit hygiene** CI gate, so a local relaxation and its CI mirror read one source.
+_Avoid_: Config, hooks config (it carries only opt-outs, never the rules themselves).
+
+**Reason-as-data-field**:
+The rule that every `.quality-gate.json` opt-out records its rationale as a queryable JSON `reason` string, not a code comment. A program cannot surface a comment, so the tool quotes the reason verbatim where the bypass takes effect: the hooks' `format_override` and `src/config.js` `formatOverride()` both render `<key> opt-out from .quality-gate.json (<value>): <reason>`. `src/config.js` rejects an opt-out whose `reason` is missing or empty, since a durable, surfaced rationale is the whole point of the file (ADR 0002).
+_Avoid_: Reason comment.
+
+**Conventional-Commits commit hook**:
+The commit-msg half of the repo-contract baseline: `.husky/commit-msg` checks the subject (the first non-empty, non-comment line) against `type(scope)?!?: description` for the known types (`feat`, `fix`, `perf`, `refactor`, `test`, `build`, `chore`, `docs`, `style`, `ci`, `revert`), skipping generated subjects (`Merge`, `Revert`, `fixup!`, `squash!`). `skipConventionalCommits` in `.quality-gate.json` relaxes it, quoting the reason. The **Commit hygiene** gate mirrors it on CI.
+_Avoid_: Commitlint (no commitlint dependency; the check is inline POSIX sh plus grep).
+
+**Em-dash policy**:
+The repo-contract rule banning the em-dash character in added Markdown and in commit messages, up to an optional budget. The pre-commit hook scans added lines of staged `*.md`/`*.mdx` and fails once the count passes `maxAllowedEmDashes` (default 0); the commit-msg hook fails on any em dash in the message unless `allowEmDashes` is set. Both opt-outs live in `.quality-gate.json` and the **Commit hygiene** gate mirrors both on CI.
+_Avoid_: Dash rule, punctuation lint.
+
+**Default-branch protection**:
+The pre-commit rule refusing a commit made while `HEAD` is the default branch (resolved from `origin/HEAD`, falling back to `init.defaultBranch` then `main`), pushing the author to branch first. `allowDefaultBranchCommits` in `.quality-gate.json` relaxes it. Part of the repo-contract baseline and mirrored by the **Commit hygiene** gate. Distinct from GitHub's server-side branch protection: this is the local pre-commit guard, the reason the term is qualified.
+_Avoid_: Branch protection (GitHub's server-side setting is the collision this qualified name guards against).
+
+**`.husky/local` chain**:
+The consumer-owned extension point the repo-contract hooks call last: `.husky/pre-commit` and `.husky/commit-msg` each run `sh -e .husky/local/<name>` when it is present, so a repo adds its own tier-3 project checks (lint-staged, gitleaks, build) without editing the vendored hook. `init` never writes `.husky/local/`, so it survives `init --force`, which would otherwise repair a drifted vendored hook. This repo's `.husky/local/pre-commit` runs `yarn lint-staged`.
+_Avoid_: Local hook override (it chains after the contract checks; it does not replace them).
+
 **Suggested rule**:
 The agent-guidance snippet `init` prints to stdout (it does not write it to any file) for the operator to paste into their own agent-rules file (`AGENTS.md`, `CLAUDE.md`, editor rules). It tells an agent to follow the **Author guide** (`.template.issue.md` / `.template.pr.md`) and to pre-flight validate before opening the issue or PR. Kept out of the repo so `init` never clobbers a file it does not own. Names no subcommand, flag, or exit code, deferring to `--help`: a pasted copy is unreachable from here, so whatever it pins about the CLI surface strands its consumer when that surface moves.
 
@@ -77,10 +113,10 @@ A local, on-demand backfill that applies quality labels and scorecards across a 
 Running the validator against a drafted issue body locally (`validate-issue <file>`) before `gh issue create`, to catch hard errors before the issue exists.
 
 **Drift test**:
-A test asserting that a restated copy of a fact still matches its single source. The standing cases: each rendering's structure against its **Intent** (the Issue Form and the Author guides against `rules.js`, the PR template against `PR_SECTIONS`), the README threshold numbers against the rules, this repo's dogfood copies against the canonical `templates/` bundle, and the two workflow files against each other's shared parts. Renderings are checked as strictly as their format allows: the YAML on headings, order, required, and options; the Markdown guides on headings and order only, since their prose is free. Duplication kept on purpose is made safe by a drift test rather than eliminated.
+A test asserting that a restated copy of a fact still matches its single source. The standing cases: each rendering's structure against its **Intent** (the Issue Form and the Author guides against `rules.js`, the PR template against `PR_SECTIONS`), the README threshold numbers against the rules, this repo's dogfood copies against the canonical `templates/` bundle (including its `.husky/pre-commit` and `.husky/commit-msg` against `templates/husky/*`, byte-identical so editing one without the other goes red), and the two workflow files against each other's shared parts. Renderings are checked as strictly as their format allows: the YAML on headings, order, required, and options; the Markdown guides on headings and order only, since their prose is free. Duplication kept on purpose is made safe by a drift test rather than eliminated.
 
 **Accepted duplication**:
-A restatement deliberately left in place because collapsing it costs more than it saves, guarded by a drift test. Standing examples: the two workflow files (consumer `@main` vs dogfood `./`), the byte-identical PR pair (`.template.pr.md` == `.github/PULL_REQUEST_TEMPLATE.md`), and this repo's dogfood copies against the `templates/` bundle.
+A restatement deliberately left in place because collapsing it costs more than it saves, guarded by a drift test. Standing examples: the two workflow files (consumer `@main` vs dogfood `./`), the byte-identical PR pair (`.template.pr.md` == `.github/PULL_REQUEST_TEMPLATE.md`), the vendored `.husky/*` hooks (this repo's `.husky/pre-commit` and `.husky/commit-msg` byte-identical to `templates/husky/*`), and this repo's dogfood copies against the `templates/` bundle.
 
 ## Example dialogue
 
@@ -111,3 +147,11 @@ A restatement deliberately left in place because collapsing it costs more than i
 **Dev**: The PR gate never asks whether the code actually matches #42's acceptance criteria?
 
 **Domain expert**: Right. It checks presence, not conformance. If the implementation drifted from the issue, that's a Divergence, and the gate only checks the author wrote a rationale for it. Judging whether the rationale is honest is the reviewer's job, human or agent, not the gate's.
+
+**Dev**: The git hooks block a Conventional Commits violation and an em dash. Does this repo own every hook I have?
+
+**Domain expert**: No, only the tier-2 repo-contract ones. Tiered enforcement splits hooks by audience. Tier 1 is agent-hygiene (block `.claude/`, `.planning/`, `tmp/`; the branch-name check): personal-workflow guards that live in your dotfiles via `core.hooksPath` and are never vendored. Tier 2 is the repo-contract baseline (Conventional Commits, em-dash policy, no default-branch commits), which quality-gate owns: `init` ships those as committed `.husky/*` hooks and the Commit hygiene gate mirrors them on CI. Tier 3 is your project checks (lint, build, gitleaks), which chain off the `.husky/local` extension. The Conventional Commits and em-dash blocks you saw are tier 2.
+
+**Dev**: One commit legitimately needs an em dash. How do I get it through without `--no-verify`?
+
+**Domain expert**: Add a committed `.quality-gate.json` opt-out, never a per-machine `git config` flag. For the message, `overrides.allowEmDashes` with `{"value": true, "reason": "..."}`; for staged Markdown, `overrides.maxAllowedEmDashes` with a numeric budget and a reason. The `reason` is a data field, not a comment, precisely so the hook can quote it back: it prints `allowEmDashes opt-out from .quality-gate.json (true): <your reason>`. `src/config.js` rejects the entry if the reason is missing or empty. And because the same file feeds the Commit hygiene CI gate, the opt-out you commit locally is the one CI honors too, so the bypass is legible in both places rather than invisible.
