@@ -352,30 +352,50 @@ export class GitHub {
   }
 
   /**
-   * Create the label with its color/description if it doesn't exist.
+   * Reconcile a label to its canonical color/description: create it if missing,
+   * repair it if either field has drifted, leave it untouched if it already
+   * matches. The gate schema is fixed by design (no per-repo customization), so
+   * overwriting drifted metadata clobbers nothing intentional.
    * @param {string} name
    * @param {string} color - Six-digit hex, no leading `#`.
    * @param {string} description
-   * @returns {Promise<void>}
+   * @returns {Promise<'created'|'repaired'|'ok'>} What the call did.
    */
   async ensureLabel(name, color, description) {
-    const res = await this.#request(
-      "GET",
-      `${this.#base()}/labels/${encodeURIComponent(name)}`,
-    );
-    if (res.ok) return;
-    if (res.status !== 404) {
+    const path = `${this.#base()}/labels/${encodeURIComponent(name)}`;
+    const res = await this.#request("GET", path);
+
+    if (res.status === 404) {
+      const create = await this.#request("POST", `${this.#base()}/labels`, {
+        name,
+        color,
+        description,
+      });
+      // 422 = created concurrently by a racing run; treat as success.
+      if (!create.ok && create.status !== 422) {
+        throw new Error(`Failed to create label ${name}: ${create.status}`);
+      }
+      return "created";
+    }
+    if (!res.ok) {
       throw new Error(`Failed to look up label ${name}: ${res.status}`);
     }
-    const create = await this.#request("POST", `${this.#base()}/labels`, {
-      name,
-      color,
-      description,
-    });
-    // 422 = created concurrently by a racing run; treat as success.
-    if (!create.ok && create.status !== 422) {
-      throw new Error(`Failed to create label ${name}: ${create.status}`);
+
+    // GitHub stores color lowercase and may return a null description; normalize
+    // both before comparing so a case-only or null/"" difference isn't churn.
+    const existing = /** @type {{color?: string, description?: string}} */ (
+      await res.json()
+    );
+    const matches =
+      (existing.color ?? "").toLowerCase() === color.toLowerCase() &&
+      (existing.description ?? "") === description;
+    if (matches) return "ok";
+
+    const patch = await this.#request("PATCH", path, { color, description });
+    if (!patch.ok) {
+      throw new Error(`Failed to update label ${name}: ${patch.status}`);
     }
+    return "repaired";
   }
 
   /**

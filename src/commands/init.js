@@ -4,11 +4,37 @@
 // rule to stdout (written to no file).
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { GitHub } from "../github.js";
+import {
+  LABEL_META,
+  PR_LABEL_META,
+  COMMIT_LABEL_META,
+  OVERRIDE_LABEL_META,
+} from "../constants.js";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..");
+
+// The fixed label schema `init` materializes and reconciles: the three gate
+// triples plus the three override labels, each with code-owned metadata
+// (`constants.js`). Flattened to `{ name, color, description }` so the label step
+// is one loop, mirroring the file loop above it.
+export const GATE_LABELS = [
+  LABEL_META,
+  PR_LABEL_META,
+  COMMIT_LABEL_META,
+  OVERRIDE_LABEL_META,
+].flatMap((meta) =>
+  Object.entries(meta).map(([name, { color, description }]) => ({
+    name,
+    color,
+    description,
+  })),
+);
 
 // `templates/` is the canonical bundle for the Forms, workflows, and repo-contract
 // git hooks; this repo's `.github/` copies, root `.template.*.md` guides, and
@@ -122,6 +148,66 @@ function classify() {
 }
 
 /**
+ * Run a `gh` CLI command, returning trimmed stdout or `null` on any failure
+ * (gh absent, not authenticated, not in a repo). Unlike `sweep`'s `gh`, this
+ * never exits: the label step degrades to skipped so `init` stays usable with no
+ * credentials or repo context.
+ * @param {string[]} args - Arguments passed to `gh`.
+ * @returns {string|null} Trimmed stdout, or null if the command failed.
+ */
+function ghOrNull(args) {
+  try {
+    return execFileSync("gh", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Discover credentials and repo context the way `sweep` does, but softly: return
+ * a `GitHub` client, or `null` when either the token or the repo is unavailable
+ * (so the label step reports skipped rather than failing the run). The token
+ * comes from `GITHUB_TOKEN` when set, else `gh auth token`.
+ * @returns {GitHub|null}
+ */
+function resolveLabelClient() {
+  const token = process.env.GITHUB_TOKEN || ghOrNull(["auth", "token"]);
+  const repoJson = ghOrNull(["repo", "view", "--json", "owner,name"]);
+  if (!token || !repoJson) return null;
+  const { owner, name } = JSON.parse(repoJson);
+  return new GitHub({
+    token,
+    apiUrl: process.env.GITHUB_API_URL,
+    owner: owner.login,
+    repo: name,
+  });
+}
+
+/**
+ * Create or repair every label in the fixed schema, reporting per label the same
+ * way the file loop reports per file (created / repaired / ok). With no client
+ * (no credentials or repo context), report a single skipped line and return: the
+ * file scaffolding above has already succeeded and the exit code is unchanged.
+ * @param {object} params
+ * @param {GitHub|null} params.client - The API client, or null to skip.
+ * @param {(line: string) => void} params.log
+ * @returns {Promise<void>}
+ */
+export async function ensureGateLabels({ client, log }) {
+  if (!client) {
+    log("skip     labels (no GitHub credentials or repo context)");
+    return;
+  }
+  for (const { name, color, description } of GATE_LABELS) {
+    const state = await client.ensureLabel(name, color, description);
+    log(`${state.padEnd(9)}${name}`);
+  }
+}
+
+/**
  * Copy the Issue Form, PR Form, their workflows, and the repo-contract git hooks
  * into the current working directory, then print the Suggested rule to stdout.
  *
@@ -130,10 +216,16 @@ function classify() {
  * a write-nothing report that exits 1; re-run with `--force` to overwrite only
  * the files that differ. Warns (but proceeds) when not at a repo root. The
  * Suggested rule is printed on success and written to no file.
+ *
+ * After the files, reconcile the fixed label schema (the three gate triples plus
+ * the three override labels): create any missing label, repair any whose
+ * color/description drifted. This needs credentials and repo context, discovered
+ * the way `sweep` does (`gh auth token`, `gh repo view`); with neither the label
+ * step is reported as skipped and the file scaffolding still stands.
  * @param {string[]} [argv] - Remaining CLI args; `--force` upgrades in place.
- * @returns {void}
+ * @returns {Promise<void>}
  */
-export function init(argv = []) {
+export async function init(argv = []) {
   const force = argv.includes("--force");
 
   // Soft guard: `.github/` is only read at the repo root. Warn but proceed;
@@ -174,6 +266,12 @@ export function init(argv = []) {
     writeFileSync(dest, desired);
     console.log(`${state === ABSENT ? "create" : "update"} ${to}`);
   }
+
+  console.log("\nLabels:");
+  await ensureGateLabels({
+    client: resolveLabelClient(),
+    log: (line) => console.log(line),
+  });
 
   console.log(
     "\nDone. Commit these files to opt this repo into the issue quality and PR readiness gates.\n" +
