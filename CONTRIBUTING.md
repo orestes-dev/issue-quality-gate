@@ -53,6 +53,46 @@ recorded as a data field, not a comment, so the hook can quote it verbatim when
 the bypass triggers. The reader is [`src/config.js`](src/config.js); an absent
 file means full enforcement with no opt-outs.
 
+## Labels
+
+`init` owns the fixed label schema: the three gate triples (`issue-quality:*`,
+`pr-readiness:*`, `commit-hygiene:*`) and the three override labels
+(`override:issue-quality`, `override:pr-readiness`, `override:commit-hygiene`).
+Every label's colour and description live in code
+([`src/constants.js`](src/constants.js): `LABEL_META`, `PR_LABEL_META`,
+`COMMIT_LABEL_META`, `OVERRIDE_LABEL_META`), so `init` can both **create** any
+missing label and **reconcile** one whose colour or description has drifted,
+reporting `created` / `repaired` / `ok` per label the way it reports per file.
+The override labels are materialized here rather than lazily: a gate run never
+applies one (a human does), so nothing would ever create them on demand.
+
+The label step discovers credentials and repo context the way `sweep` does
+(`gh auth token`, `gh repo view`), but softly: with no credentials or repo it is
+reported as skipped and the file scaffolding still succeeds.
+
+### Renaming a gate label
+
+A rename is a deliberate, multi-repo procedure, not something made safe
+automatically. The label strings are duplicated into
+[`templates/workflow/*.yml`](templates/workflow/), which consumers copy once
+while pinning the Action `@main`; a rename reaches the Action everywhere but
+never the consumers' `if:` conditions, and that fails open silently (the workflow
+just stops triggering on the override toggle, with no error). To rename one:
+
+1. Change the string in [`src/constants.js`](src/constants.js), and in
+   `templates/workflow/*.yml` wherever it is named.
+2. Find the consumers: `gh search code "orestes-dev/repo-contract@main" --owner orestes-dev`.
+   The code-search index lags, so also check any repo carrying
+   `.github/workflows/issue-quality.yml`, `pr-readiness.yml`, or
+   `commit-hygiene.yml`. Known consumers today: `orestes-dev/second-brain`,
+   `orestes-dev/food`.
+3. In each consumer: `gh label edit <old> --name <new>` (renaming preserves the
+   label on every object carrying it, so there is no migration), then
+   `npx github:orestes-dev/repo-contract init --force` to refresh the copied
+   workflows, then commit.
+4. Verify the override toggle still triggers a run in each consumer. Nothing will
+   tell you if it does not.
+
 ## Tests
 
 `yarn test` runs the whole suite. Alongside the validator, action, sweep, and

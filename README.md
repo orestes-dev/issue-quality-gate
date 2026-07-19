@@ -69,6 +69,15 @@ This drops seven files, which together are the opt-in:
 
 Commit all seven. `init` also vendors two [git hooks](#git-hooks) under `.husky/`.
 
+`init` then creates the fixed label schema in the repo: the three gate triples
+(`issue-quality:*`, `pr-readiness:*`, `commit-hygiene:*`) and the three override
+labels (`override:issue-quality`, `override:pr-readiness`, `override:commit-hygiene`),
+each with a code-owned colour and description. Re-running `init` repairs any of
+them whose colour or description has drifted, so the labels mean the same thing
+in every repo. This step needs credentials and repo context (discovered from
+`gh auth token` and `gh repo view`); with neither it is reported as skipped and
+the file scaffolding still succeeds.
+
 Then `init` prints a **Suggested rule** to stdout: an agent-guidance snippet
 pointing at the issue and PR Author guides and at the pre-flight step, for you to
 paste into your own agent-rules file (`AGENTS.md`, `CLAUDE.md`, editor rules).

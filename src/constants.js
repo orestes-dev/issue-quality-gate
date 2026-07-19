@@ -114,6 +114,29 @@ export const COMMIT_LABEL_META = {
 // readiness or issue quality.
 export const COMMIT_OVERRIDE_LABEL = "override:commit-hygiene";
 
+// Colors/descriptions for the three human-applied override labels, owned in code
+// like every other gate label (LABEL_META et al.) so `init` can materialize and
+// reconcile them. Lazy creation can't: an override is applied by a human, never
+// by a gate run, so nothing ever creates one on demand. All three share one
+// color; they are a single conceptual escape hatch across three namespaces.
+export const OVERRIDE_LABEL_META = {
+  [OVERRIDE_LABEL]: {
+    color: "d4c5f9",
+    description:
+      "Bypasses the issue quality gate when paired with a written rationale",
+  },
+  [PR_OVERRIDE_LABEL]: {
+    color: "d4c5f9",
+    description:
+      "Bypasses the PR readiness gate when paired with a written rationale",
+  },
+  [COMMIT_OVERRIDE_LABEL]: {
+    color: "d4c5f9",
+    description:
+      "Bypasses the commit-hygiene gate when paired with a written rationale",
+  },
+};
+
 // Distinct from COMMENT_MARKER and PR_COMMENT_MARKER so a PR can carry all three
 // scorecards without any gate adopting another's comment.
 export const COMMIT_COMMENT_MARKER = "<!-- commit-hygiene-gate -->";

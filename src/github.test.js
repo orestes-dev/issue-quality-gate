@@ -116,3 +116,79 @@ test("a paginated read (#paginate) retries a 5xx on a page", async () => {
   assert.deepEqual(commits, [{ sha: "abc", subject: "feat: x" }]);
   assert.equal(state.calls, 2);
 });
+
+// A fetch that records each request (method + path suffix + parsed body) and
+// replies from a queue, so ensureLabel's create/repair/ok branches can be
+// asserted by what it wrote, not just the return value.
+function recordingFetch(script) {
+  const requests = [];
+  const state = { calls: 0 };
+  const fetch = async (url, init) => {
+    requests.push({
+      method: init.method,
+      url,
+      body: init.body ? JSON.parse(init.body) : undefined,
+    });
+    const step = script[state.calls];
+    state.calls += 1;
+    return {
+      ok: step.status < 400,
+      status: step.status,
+      json: async () => step.body ?? {},
+    };
+  };
+  return { fetch, requests, state };
+}
+
+test("ensureLabel creates a missing label (404 then POST)", async () => {
+  const { fetch, requests } = recordingFetch([
+    { status: 404 },
+    { status: 201 },
+  ]);
+  const result = await client(fetch).ensureLabel("gate:x", "0e8a16", "desc");
+  assert.equal(result, "created");
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].method, "GET");
+  assert.equal(requests[1].method, "POST");
+  assert.deepEqual(requests[1].body, {
+    name: "gate:x",
+    color: "0e8a16",
+    description: "desc",
+  });
+});
+
+test("ensureLabel treats a 422 on create (a racing run) as success", async () => {
+  const { fetch } = recordingFetch([{ status: 404 }, { status: 422 }]);
+  const result = await client(fetch).ensureLabel("gate:x", "0e8a16", "desc");
+  assert.equal(result, "created");
+});
+
+test("ensureLabel repairs a drifted label (PATCHes color/description)", async () => {
+  const { fetch, requests } = recordingFetch([
+    { status: 200, body: { color: "cccccc", description: "old" } },
+    { status: 200 },
+  ]);
+  const result = await client(fetch).ensureLabel("gate:x", "0e8a16", "new");
+  assert.equal(result, "repaired");
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].method, "PATCH");
+  assert.deepEqual(requests[1].body, { color: "0e8a16", description: "new" });
+});
+
+test("ensureLabel leaves a matching label untouched (no second write)", async () => {
+  const { fetch, requests } = recordingFetch([
+    { status: 200, body: { color: "0e8a16", description: "desc" } },
+  ]);
+  const result = await client(fetch).ensureLabel("gate:x", "0e8a16", "desc");
+  assert.equal(result, "ok");
+  assert.equal(requests.length, 1, "a matching label must not be rewritten");
+});
+
+test("ensureLabel ignores color case and a null description when comparing", async () => {
+  const { fetch, requests } = recordingFetch([
+    { status: 200, body: { color: "0E8A16", description: null } },
+  ]);
+  const result = await client(fetch).ensureLabel("gate:x", "0e8a16", "");
+  assert.equal(result, "ok");
+  assert.equal(requests.length, 1);
+});
