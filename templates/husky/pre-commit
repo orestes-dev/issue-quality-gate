@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Repo-contract pre-commit hook, vendored by repo-contract `init` (ADR 0002,
-# ADR 0011, orestes/dotfiles#52). A committed file, so it runs where ~/.dotfiles
+# ADR 0012, orestes/dotfiles#52). A committed file, so it runs where ~/.dotfiles
 # is absent (CI, containers, fresh worktrees). Depends only on POSIX sh, git, and
 # jq (jq only when .repo-contract.json exists), never on node_modules, so it runs
 # before `yarn install`.

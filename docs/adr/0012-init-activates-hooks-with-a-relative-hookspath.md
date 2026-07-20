@@ -98,6 +98,12 @@ loud step.
   `.husky` on the next `init`. Both resolve to the same hook files; a subsequent
   husky `prepare` moves it back, and the next `init` repairs it again. A consumer
   wanting the worktree-safe behavior permanently drops `prepare: husky`.
+- `core.hooksPath` is single-valued, so the local value `init` writes displaces
+  any global one for this repository, including the tier-1 agent-hygiene hooks in
+  a contributor's dotfiles. That was already true of every husky repo; `init`
+  makes it explicit and reports it, rather than leaving it a side effect of an
+  install. A contributor wanting both keeps their tier-1 checks in
+  `.husky/local/`, which the vendored hooks chain to.
 - The vendored hooks are mode-`0755` files. A consumer whose tooling strips the
   executable bit gets it back on the next `init`, but between the two git will
   skip the hook with a hint, not an error.

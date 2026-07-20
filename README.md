@@ -493,7 +493,7 @@ as `create`, `repair`, or `ok`. Git then executes the committed files directly,
 with no husky shim, no `node_modules`, and no package-manager install. Where a
 repository exists and the setting cannot be written, `init` exits non-zero and
 says the baseline is not enforced; hooks that quietly do nothing are the failure
-this replaces (ADR 0011).
+this replaces (ADR 0012).
 
 The value is deliberately relative. `core.hooksPath` lives in the shared
 `.git/config` that every linked worktree reads, so an absolute path pins them all

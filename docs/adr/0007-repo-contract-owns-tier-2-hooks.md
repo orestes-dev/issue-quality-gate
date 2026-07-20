@@ -33,7 +33,7 @@ Ownership means three things, all already in the code:
   step instead of a silent no-op. Read "runs before `yarn install`" above as a
   claim about execution, never about activation: the full guarantee, and the CI
   mirror that backs the case where nobody activated anything, is
-  [ADR 0011](0011-init-activates-hooks-with-a-relative-hookspath.md). Dotfiles
+  [ADR 0012](0012-init-activates-hooks-with-a-relative-hookspath.md). Dotfiles
   ADR 0002 needs the same reading of its "runs everywhere" wording.
 - **Drift is byte-exact.** Because the copies are verbatim, exact equality is the
   drift signal. `classify()` in `src/commands/init.js` compares each vendored

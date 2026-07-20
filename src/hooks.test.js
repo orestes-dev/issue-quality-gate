@@ -7,7 +7,7 @@
 //   3. Activation: `init` points `core.hooksPath` at the relative `.husky` and
 //      writes the hooks executable, so a checkout that never ran an install
 //      enforces the baseline and a linked worktree runs its own committed hooks
-//      (ADR 0011). Those two are exercised through a real `git commit`, since a
+//      (ADR 0012). Those two are exercised through a real `git commit`, since a
 //      hook git never invokes is exactly the failure being regression-tested.
 // The hooks are POSIX sh + git + jq only; the behavior tests invoke them with
 // `sh -e` directly rather than through a commit, which is faster and equivalent.
@@ -309,6 +309,10 @@ test("init reports activation skipped outside a git repository", () => {
     assert.equal(status, 0);
     assert.match(stdout, /skip\s+core\.hooksPath \(no git repository here\)/);
     assert.match(stdout, /git config core\.hooksPath \.husky/);
+    // The closing summary reports what happened, never a live-hooks claim the
+    // run did not earn.
+    assert.match(stdout, /The git hooks are NOT active/);
+    assert.doesNotMatch(stdout, /hooks are live/);
   });
 });
 

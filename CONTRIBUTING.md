@@ -50,7 +50,7 @@ stay relative: `core.hooksPath` is shared across linked worktrees, so an absolut
 path makes every worktree run one fixed checkout's hooks. `init` repairs an
 absolute value, and repairs husky's `.husky/_` shim path too. This repo has no
 husky dependency: the hooks are executable and git execs them directly
-([ADR 0011](docs/adr/0011-init-activates-hooks-with-a-relative-hookspath.md)).
+([ADR 0012](docs/adr/0012-init-activates-hooks-with-a-relative-hookspath.md)).
 If a hook stops firing, check `git config core.hooksPath` first, then that
 `.husky/*` is still executable (git skips a non-executable hook with only a
 hint).

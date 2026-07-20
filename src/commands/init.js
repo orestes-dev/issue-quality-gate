@@ -100,7 +100,7 @@ const TEMPLATES = [
     // Repo-contract commit-msg hook (Conventional Commits subject, em-dash
     // policy). Vendored as a committed hook so it enforces where `~/.dotfiles`
     // is absent (CI, containers, fresh worktrees); jq/git/sh only, no
-    // node_modules, so it runs before `yarn install` (ADR 0002, ADR 0011). Git
+    // node_modules, so it runs before `yarn install` (ADR 0002, ADR 0012). Git
     // executes it directly via `core.hooksPath`, which is why it is written
     // executable.
     from: join(ROOT, "templates", "husky", "commit-msg"),
@@ -124,7 +124,7 @@ const ABSENT = "absent";
 const OK = "ok";
 const DRIFT = "drift";
 
-// Activation (ADR 0011). Vendoring a hook file only guarantees it can *run*;
+// Activation (ADR 0012). Vendoring a hook file only guarantees it can *run*;
 // git runs it only once `core.hooksPath` points at the directory holding it.
 // `init` sets that itself so a checkout that never ran a package-manager install
 // (fresh clone, linked worktree, container) still enforces the baseline.
@@ -209,7 +209,7 @@ function readHooksPath(cwd) {
 
 /**
  * Point `core.hooksPath` at the vendored hook directory, so the files `init`
- * just wrote actually run (ADR 0011). Sets the relative `.husky`, and repairs
+ * just wrote actually run (ADR 0012). Sets the relative `.husky`, and repairs
  * any other value, including husky's `.husky/_` shim and any absolute path that
  * would make every linked worktree run one fixed checkout's hooks.
  *
@@ -337,7 +337,7 @@ export async function ensureGateLabels({ client, log }) {
  *
  * After the files, activate them: each vendored hook is written executable and
  * `core.hooksPath` is set to the relative `.husky`, repairing any other value
- * (ADR 0011). That is what makes a checkout which never ran a package-manager
+ * (ADR 0012). That is what makes a checkout which never ran a package-manager
  * install enforce the baseline, and what keeps a linked worktree on the hooks
  * committed to its own branch.
  *
@@ -396,7 +396,7 @@ export async function init(argv = []) {
   }
 
   console.log("\nActivation:");
-  ensureHooksPath({ log: (line) => console.log(line) });
+  const activation = ensureHooksPath({ log: (line) => console.log(line) });
 
   console.log("\nLabels:");
   await ensureGateLabels({
@@ -404,13 +404,21 @@ export async function init(argv = []) {
     log: (line) => console.log(line),
   });
 
+  // The hook paragraph reports what actually happened: claiming the hooks are
+  // live where activation was skipped would restate the bug this step fixes.
+  const hooksNote =
+    activation === "skipped"
+      ? `The git hooks are NOT active: there is no git repository here yet. Run \`git init\` and ` +
+        `then \`git config core.hooksPath ${HOOKS_PATH}\` (or re-run this command).\n`
+      : `The git hooks are live in this checkout now (core.hooksPath=${HOOKS_PATH}, a relative value, ` +
+        "so each linked worktree runs the hooks committed on its own branch).\n";
+
   console.log(
     `\nDone. Commit these files to opt this repo into the issue quality and PR readiness gates.\n` +
-      `The git hooks are live in this checkout now (core.hooksPath=${HOOKS_PATH}, a relative value, ` +
-      "so each linked worktree runs the hooks committed on its own branch). core.hooksPath is " +
-      "per-clone git config, never committed: run this command once in every fresh clone or " +
-      "worktree, or the hooks sit on disk unread. CI keeps the un-bypassable copy of the same " +
-      "rules in the commit-hygiene gate.\n" +
+      hooksNote +
+      "core.hooksPath is per-clone git config, never committed: run this command once in every " +
+      "fresh clone or worktree, or the hooks sit on disk unread. CI keeps the un-bypassable copy " +
+      "of the same rules in the commit-hygiene gate.\n" +
       "The issue gate only labels issues going forward. To backfill labels + scorecards " +
       "onto the existing open backlog, run: repo-contract sweep",
   );
