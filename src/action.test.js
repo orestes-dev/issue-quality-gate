@@ -319,41 +319,84 @@ test("the issue workflow couples the trigger filter to the schema strings", () =
 
 // The narrower mitigation ADR 0018 accepted in place of the dropped `uses: ./`
 // self-test. Nothing else executes `action.yml`, so its one piece of routing
-// logic, the `object` input to command-file mapping, is asserted here: each
+// logic, the `object` input to command-file mapping, is asserted here: every
 // value the composite dispatches on must resolve to a file `src/commands/`
 // actually ships, and the run step must invoke that path.
-const OBJECT_COMMANDS = {
-  issue: "action",
-  pr: "pr",
-  commit: "commit",
-};
+
+// The single quoted literal in an expression fragment: `inputs.object == 'pr'`
+// and `'action'` both yield their one string. Fragments carry at most two, so a
+// scan for the quote pairs is enough and no expression grammar is needed.
+const quoted = (fragment) => fragment.split("'").filter((_, i) => i % 2 === 1);
+
+/**
+ * Read the `object` -> command-file mapping straight off the COMMAND expression,
+ * so a value ADDED to `action.yml` is checked without also being added here.
+ * The shape is a chain of `<cond> && '<command>'` terms with a bare `'<command>'`
+ * fallthrough last, joined by `||`:
+ *   inputs.object == 'pr' && 'pr' || inputs.object == 'commit' && 'commit' || 'action'
+ * The fallthrough is the `default` input's mapping; it names no object itself.
+ * @param {string} expression - The raw `env.COMMAND` value.
+ * @param {string} fallthroughObject - The `object` input's default.
+ * @returns {Record<string, string>}
+ */
+function dispatchTable(expression, fallthroughObject) {
+  const table = {};
+  for (const term of expression.split("||")) {
+    const [condition, result] = term.split("&&");
+    if (result === undefined) {
+      // The fallthrough: one literal, and the surrounding `${{ ... }}` braces.
+      const [command] = quoted(condition);
+      table[fallthroughObject] = command;
+      continue;
+    }
+    const [object] = quoted(condition);
+    const [command] = quoted(result);
+    table[object] = command;
+  }
+  return table;
+}
 
 test("every action.yml `object` value dispatches to an existing command file", () => {
   const action = parse(read("action.yml"));
   const step = action.runs.steps.find((s) => s.name === "Run gate");
 
   // The gate runs whatever COMMAND resolves to, so the coupling is only real if
-  // the command name is what the run line interpolates.
-  assert.equal(
-    step.run.trim(),
-    'node "$GITHUB_ACTION_PATH/src/commands/${COMMAND}.js"',
+  // the command name is what the run line interpolates. Matched as a fragment,
+  // not as the whole line, so adding a node flag is not a routing failure.
+  assert.ok(
+    step.run.includes("src/commands/${COMMAND}.js"),
+    "the run step no longer invokes src/commands/${COMMAND}.js",
   );
 
-  const expression = step.env.COMMAND;
-  for (const [object, command] of Object.entries(OBJECT_COMMANDS)) {
+  const table = dispatchTable(step.env.COMMAND, action.inputs.object.default);
+
+  // A parse that degenerated would yield an empty table and vacuously pass the
+  // loop below, so the table's own shape is asserted first: it is derived, not
+  // listed, precisely so a value ADDED to action.yml is covered without an edit
+  // here.
+  assert.ok(
+    Object.keys(table).length > 0,
+    "no dispatch could be read from action.yml's COMMAND expression",
+  );
+  assert.ok(
+    table[action.inputs.object.default],
+    `the default object: ${action.inputs.object.default} has no fallthrough command`,
+  );
+
+  for (const [object, command] of Object.entries(table)) {
+    assert.ok(
+      object && command,
+      `action.yml has a dispatch with no object or no command: ${object} -> ${command}`,
+    );
     assert.ok(
       existsSync(join(ROOT, "src", "commands", `${command}.js`)),
       `object: ${object} dispatches to src/commands/${command}.js, which does not exist`,
     );
-    // `issue` is the fallthrough: it is named by the input default, not by a
-    // comparison in the expression.
-    const dispatch =
-      object === action.inputs.object.default
-        ? `|| '${command}'`
-        : `inputs.object == '${object}' && '${command}'`;
+    // Every dispatched value must also be documented, or a consumer cannot know
+    // to pass it.
     assert.ok(
-      expression.includes(dispatch),
-      `action.yml no longer dispatches object: ${object} to ${command}.js`,
+      action.inputs.object.description.includes(`\`${object}\``),
+      `action.yml dispatches object: ${object} but never documents it`,
     );
   }
 });

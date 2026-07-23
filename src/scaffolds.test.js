@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { SCAFFOLDS } from "./scaffolds.js";
@@ -19,9 +19,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 for (const { id, files } of SCAFFOLDS) {
   for (const { from, to } of files) {
     test(`${id}: ${to} is byte-identical to its templates source`, () => {
+      // Checked before reading, so a destination that was never installed (or
+      // was deleted) reports what is missing instead of a bare ENOENT from the
+      // read below.
+      assert.ok(
+        existsSync(join(ROOT, to)),
+        `the ${id} scaffold installs ${to}, which does not exist in this repo`,
+      );
       assert.equal(
         readFileSync(join(ROOT, to), "utf8"),
         readFileSync(from, "utf8"),
+        `${to} has drifted from its source ${relative(ROOT, from)}`,
       );
     });
   }

@@ -182,7 +182,8 @@ export const SCAFFOLD = {
 export const SCAFFOLD_IDS = Object.values(SCAFFOLD);
 
 // The `.repo-contract.json` key holding the install manifest: an authoritative
-// whitelist of installed scaffolds, rewritten on every `init` run. An absent key
+// whitelist of installed scaffolds, rewritten whenever an `init` run records a
+// selection different from the one already on disk. An absent key
 // means NONE installed, not all-in (ADR 0016), so a repo scaffolded before the
 // manifest existed takes one `init` run to record what it already has.
 export const SCAFFOLDS_KEY = "scaffolds";

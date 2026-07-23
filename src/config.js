@@ -196,6 +196,13 @@ export function loadConfig(cwd = process.cwd()) {
  * merged into, which is what keeps it a record of what is installed rather than
  * an accumulating wish list.
  *
+ * A run that would record the manifest it already records writes nothing. The
+ * file is a consumer's committed source, so a formatter owns its bytes: `init`
+ * emits two-space JSON, but Prettier keeps a short array inline, and a byte-level
+ * rewrite would make the two fight, churning the file on every install/format
+ * cycle. Comparing the recorded ids rather than the rendered bytes is what makes
+ * `init --force` on an unchanged selection a true no-op.
+ *
  * Writing an empty selection is a programming error, not a config the file can
  * hold: `[]` is never a valid manifest, so callers refuse an empty selection
  * before reaching here (ADR 0016).
@@ -210,6 +217,7 @@ export function writeScaffolds(ids, cwd = process.cwd()) {
     );
   }
   const path = resolve(cwd, CONFIG_FILENAME);
+  /** @type {Record<string, unknown>} */
   let data = {};
   try {
     data = JSON.parse(readFileSync(path, "utf8"));
@@ -218,11 +226,19 @@ export function writeScaffolds(ids, cwd = process.cwd()) {
       throw err;
     }
   }
-  // Two-space indent and a trailing newline: the shape Prettier and `jq` both
-  // emit, so a consumer that formats its repo sees no diff churn from `init`.
+  const scaffolds = sortScaffolds(ids);
+  const recorded = data[SCAFFOLDS_KEY];
+  const unchanged =
+    Array.isArray(recorded) &&
+    recorded.length === scaffolds.length &&
+    recorded.every((id, i) => id === scaffolds[i]);
+  if (unchanged) return;
+
+  // Two-space indent and a trailing newline: `jq`'s shape, and Prettier's for
+  // everything but a short array, which the no-op above keeps it from touching.
   writeFileSync(
     path,
-    `${JSON.stringify({ ...data, [SCAFFOLDS_KEY]: sortScaffolds(ids) }, null, 2)}\n`,
+    `${JSON.stringify({ ...data, [SCAFFOLDS_KEY]: scaffolds }, null, 2)}\n`,
   );
 }
 

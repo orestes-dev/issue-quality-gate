@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -202,6 +202,39 @@ test("writeScaffolds rewrites the manifest and preserves overrides", () => {
     // Authoritative, not merged into: the second write is the whole truth.
     assert.deepEqual(config.scaffolds, SCAFFOLD_IDS);
     assert.equal(config.overrides.maxAllowedEmDashes.value, 34);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A formatter owns the file's bytes; `init` owns its ids. Re-recording the same
+// selection must not touch the file, or a repo running Prettier churns the
+// manifest on every install/format cycle (Prettier keeps a short array inline,
+// JSON.stringify breaks it onto three lines).
+test("writeScaffolds leaves the file untouched when the manifest is unchanged", () => {
+  const prettierShaped = `{\n  "scaffolds": ["quality-gates", "commit-hygiene", "git-hooks"]\n}\n`;
+  const dir = withRepo(prettierShaped);
+  try {
+    writeScaffolds(SCAFFOLD_IDS, dir);
+    assert.equal(
+      readFileSync(join(dir, CONFIG_FILENAME), "utf8"),
+      prettierShaped,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("writeScaffolds still rewrites when the recorded ids are out of order", () => {
+  const scrambled = JSON.stringify({ scaffolds: [...SCAFFOLD_IDS].reverse() });
+  const dir = withRepo(scrambled);
+  try {
+    writeScaffolds(SCAFFOLD_IDS, dir);
+    assert.deepEqual(loadConfig(dir).scaffolds, SCAFFOLD_IDS);
+    assert.notEqual(
+      readFileSync(join(dir, CONFIG_FILENAME), "utf8"),
+      scrambled,
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
