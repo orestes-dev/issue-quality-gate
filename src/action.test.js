@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
@@ -15,7 +15,6 @@ import {
   OVERRIDE_HEADING,
   STATUS,
   WONTFIX_LABEL,
-  GATE_CONTEXT,
 } from "./constants.js";
 import { goodBody } from "./fixtures.js";
 
@@ -292,54 +291,112 @@ test("a 4xx-style read error still throws (a missing object is a real failure)",
 const QUALITY_PREFIX = LABEL.FAILING.slice(0, LABEL.FAILING.indexOf(":") + 1);
 const GATE_SENDER = "github-actions[bot]";
 
-test("both workflows couple the trigger filter to the schema strings", () => {
-  for (const rel of [
-    "templates/workflow/issue-quality.yml",
-    ".github/workflows/issue-quality.yml",
-  ]) {
-    const yaml = read(rel);
-    assert.ok(
-      yaml.includes(`github.event.label.name == '${OVERRIDE_LABEL}'`),
-      `${rel} is missing the override-label trigger guard`,
-    );
-    assert.ok(
-      yaml.includes(`startsWith(github.event.label.name, '${QUALITY_PREFIX}')`),
-      `${rel} is missing the quality-label self-heal guard`,
-    );
-    assert.ok(
-      yaml.includes(`github.event.sender.login != '${GATE_SENDER}'`),
-      `${rel} is missing the human-sender guard`,
-    );
-    assert.ok(
-      yaml.includes(`github.event.label.name == '${WONTFIX_LABEL}'`),
-      `${rel} is missing the wontfix (Rejection) trigger guard`,
-    );
-  }
+// The template only: the installed copy under `.github/workflows/` is asserted
+// byte-identical to it in `scaffolds.test.js`, so checking both paths here would
+// restate a claim byte-equality already subsumes (ADR 0018).
+test("the issue workflow couples the trigger filter to the schema strings", () => {
+  const rel = "templates/workflow/issue-quality.yml";
+  const yaml = read(rel);
+  assert.ok(
+    yaml.includes(`github.event.label.name == '${OVERRIDE_LABEL}'`),
+    `${rel} is missing the override-label trigger guard`,
+  );
+  assert.ok(
+    yaml.includes(`startsWith(github.event.label.name, '${QUALITY_PREFIX}')`),
+    `${rel} is missing the quality-label self-heal guard`,
+  );
+  assert.ok(
+    yaml.includes(`github.event.sender.login != '${GATE_SENDER}'`),
+    `${rel} is missing the human-sender guard`,
+  );
+  assert.ok(
+    yaml.includes(`github.event.label.name == '${WONTFIX_LABEL}'`),
+    `${rel} is missing the wontfix (Rejection) trigger guard`,
+  );
 });
 
-// The consumer template (`@main`) and the dogfood workflow (`./`) are accepted
-// duplication: they legitimately differ on the `uses:` line, comments, and the
-// dogfood's extra `contents: read` + checkout step. This drift test guards the
-// parts that MUST stay in lock-step so the repo gates itself exactly as it tells
-// consumers to.
-test("the two workflows agree on their shared trigger, permissions, concurrency, and filter", () => {
-  const consumer = parse(read("templates/workflow/issue-quality.yml"));
-  const dogfood = parse(read(".github/workflows/issue-quality.yml"));
+// --- drift: action.yml's `object` input dispatches to command files that exist ---
 
-  // Issue trigger types. (`on` stays a string key under YAML 1.2, not a bool.)
-  assert.deepEqual(consumer.on.issues.types, dogfood.on.issues.types);
+// The narrower mitigation ADR 0018 accepted in place of the dropped `uses: ./`
+// self-test. Nothing else executes `action.yml`, so its one piece of routing
+// logic, the `object` input to command-file mapping, is asserted here: every
+// value the composite dispatches on must resolve to a file `src/commands/`
+// actually ships, and the run step must invoke that path.
 
-  // Permissions: both write issues; the dogfood additionally reads contents for
-  // `actions/checkout` (the known, tolerated difference).
-  assert.equal(consumer.permissions.issues, "write");
-  assert.equal(dogfood.permissions.issues, "write");
-  assert.equal(dogfood.permissions.contents, "read");
-  assert.equal(consumer.permissions.contents, undefined);
+// The single quoted literal in an expression fragment: `inputs.object == 'pr'`
+// and `'action'` both yield their one string. Fragments carry at most two, so a
+// scan for the quote pairs is enough and no expression grammar is needed.
+const quoted = (fragment) => fragment.split("'").filter((_, i) => i % 2 === 1);
 
-  // Concurrency and the job `if:` filter must be byte-identical.
-  assert.deepEqual(consumer.concurrency, dogfood.concurrency);
-  assert.equal(
-    consumer.jobs[GATE_CONTEXT["issue-quality"]].if,
-    dogfood.jobs[GATE_CONTEXT["issue-quality"]].if,
+/**
+ * Read the `object` -> command-file mapping straight off the COMMAND expression,
+ * so a value ADDED to `action.yml` is checked without also being added here.
+ * The shape is a chain of `<cond> && '<command>'` terms with a bare `'<command>'`
+ * fallthrough last, joined by `||`:
+ *   inputs.object == 'pr' && 'pr' || inputs.object == 'commit' && 'commit' || 'action'
+ * The fallthrough is the `default` input's mapping; it names no object itself.
+ * @param {string} expression - The raw `env.COMMAND` value.
+ * @param {string} fallthroughObject - The `object` input's default.
+ * @returns {Record<string, string>}
+ */
+function dispatchTable(expression, fallthroughObject) {
+  const table = {};
+  for (const term of expression.split("||")) {
+    const [condition, result] = term.split("&&");
+    if (result === undefined) {
+      // The fallthrough: one literal, and the surrounding `${{ ... }}` braces.
+      const [command] = quoted(condition);
+      table[fallthroughObject] = command;
+      continue;
+    }
+    const [object] = quoted(condition);
+    const [command] = quoted(result);
+    table[object] = command;
+  }
+  return table;
+}
+
+test("every action.yml `object` value dispatches to an existing command file", () => {
+  const action = parse(read("action.yml"));
+  const step = action.runs.steps.find((s) => s.name === "Run gate");
+
+  // The gate runs whatever COMMAND resolves to, so the coupling is only real if
+  // the command name is what the run line interpolates. Matched as a fragment,
+  // not as the whole line, so adding a node flag is not a routing failure.
+  assert.ok(
+    step.run.includes("src/commands/${COMMAND}.js"),
+    "the run step no longer invokes src/commands/${COMMAND}.js",
   );
+
+  const table = dispatchTable(step.env.COMMAND, action.inputs.object.default);
+
+  // A parse that degenerated would yield an empty table and vacuously pass the
+  // loop below, so the table's own shape is asserted first: it is derived, not
+  // listed, precisely so a value ADDED to action.yml is covered without an edit
+  // here.
+  assert.ok(
+    Object.keys(table).length > 0,
+    "no dispatch could be read from action.yml's COMMAND expression",
+  );
+  assert.ok(
+    table[action.inputs.object.default],
+    `the default object: ${action.inputs.object.default} has no fallthrough command`,
+  );
+
+  for (const [object, command] of Object.entries(table)) {
+    assert.ok(
+      object && command,
+      `action.yml has a dispatch with no object or no command: ${object} -> ${command}`,
+    );
+    assert.ok(
+      existsSync(join(ROOT, "src", "commands", `${command}.js`)),
+      `object: ${object} dispatches to src/commands/${command}.js, which does not exist`,
+    );
+    // Every dispatched value must also be documented, or a consumer cannot know
+    // to pass it.
+    assert.ok(
+      action.inputs.object.description.includes(`\`${object}\``),
+      `action.yml dispatches object: ${object} but never documents it`,
+    );
+  }
 });

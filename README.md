@@ -127,8 +127,9 @@ nothing left to offer, so a re-run or an `init --force` upgrade never stops for
 input.
 
 The selection is recorded as a `scaffolds` array in
-[`.repo-contract.json`](#enforcement-opt-outs), rewritten on every run. **An absent
-key means none installed**, not all-in: a repo scaffolded before the manifest
+[`.repo-contract.json`](#enforcement-opt-outs), rewritten whenever the selection
+changes and left untouched when it does not, so a repo that formats the file owns
+its bytes. **An absent key means none installed**, not all-in: a repo scaffolded before the manifest
 existed takes one `init` run to record what it already has, done deliberately
 rather than inferred from disk. Files belonging to a scaffold the manifest does
 not list are **orphans**: `init` reports them, and never creates, removes, or
@@ -536,7 +537,8 @@ Keys:
 
 - **`scaffolds`**: the install manifest, written by `init` (see
   [Scaffolds](#scaffolds)). An authoritative whitelist of what is installed,
-  rewritten on every run; an absent key means none installed. It is a plain list,
+  rewritten whenever the recorded selection changes; an absent key means none
+  installed. It is a plain list,
   not reason-bearing: an install manifest is not a bypass of an active rule, so
   there is nothing to justify. Every id must name a known scaffold and the array
   is never empty; both are hard errors on every surface that reads the file,
@@ -651,10 +653,11 @@ template path and the root PR Author guide), the thin workflows
 `commit-hygiene:*`), and `templates/git-hooks/{commit-msg,pre-commit}` (the git hooks).
 
 This repo's own `.github/`, root `.template.{issue,pr}.md`, and
-`.repo-contract/hooks/{commit-msg,pre-commit}` are a dogfood instance of that bundle: the applied
-Forms, Author guides, and hooks are drift-tested byte-identical to the canonical
-ones, and each dogfood workflow is drift-tested to agree with its consumer template
-on every shared field (they differ only on `uses: ./` vs `@main`).
+`.repo-contract/hooks/{commit-msg,pre-commit}` are a dogfood instance of that bundle:
+a plain consumer install, byte-identical to its source in every path with no
+exception, so `init` reports every file `ok` here exactly as it does anywhere else.
+One table-driven drift test walks the manifest and asserts that
+([ADR 0018](docs/adr/0018-the-dogfood-instance-is-a-plain-consumer.md)).
 
 [`CONTEXT.md`](CONTEXT.md) is the domain glossary: Issue Form, structure, field,
 section, rule, check, scorecard, override.
