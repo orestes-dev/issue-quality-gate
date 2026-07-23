@@ -298,7 +298,10 @@ flowchart TD
 ## Pull request gate
 
 The merge-blocking gate for PRs. It runs the same core over a pull request on
-`pull_request` events and checks structural presence, never conformance:
+`pull_request` events (including `synchronize`: a push cannot change the verdict,
+but a required status check binds to the head SHA, so the gate must report on the
+new head or protection blocks with nothing pending) and checks structural
+presence, never conformance:
 
 - **Title**: Conventional Commits `type(scope): summary`, same rule as issues.
 - **Required sections**: `## Summary`, `## Verification`, `## Scope`, and
