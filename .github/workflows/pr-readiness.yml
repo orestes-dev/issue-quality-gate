@@ -6,7 +6,7 @@
 name: PR Readiness Gate
 on:
   pull_request:
-    types: [opened, edited, reopened, labeled, unlabeled]
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
 permissions:
   pull-requests: write
   contents: read
@@ -29,9 +29,14 @@ jobs:
   # apart (ADR 0013).
   pr-readiness:
     runs-on: ubuntu-latest
-    # Content edits (opened/edited/reopened) always re-run the gate. Label events
-    # re-run it only when a HUMAN touches a gate-relevant label: the override
-    # toggle, or a pr-readiness:* label hand-edited (so a manual removal self-heals).
+    # Content edits (opened/edited/reopened) and new pushes (synchronize) always
+    # re-run the gate. A push cannot change the verdict (the gate reads title,
+    # body, and closingIssuesReferences), but a required status check binds to the
+    # head SHA: without a run on the new head the passing check-run stays on the
+    # old commit and protection blocks with nothing pending (ADR 0019). Label
+    # events re-run it only when a HUMAN touches a gate-relevant label: the
+    # override toggle, or a pr-readiness:* label hand-edited (so a manual removal
+    # self-heals).
     # The gate writes its own labels with GITHUB_TOKEN, and GitHub suppresses
     # those events from triggering runs; the sender check is defense-in-depth for
     # consumers who wire in a PAT or App token. run() is diff-based, so any
@@ -40,6 +45,7 @@ jobs:
       github.event.action == 'opened' ||
       github.event.action == 'edited' ||
       github.event.action == 'reopened' ||
+      github.event.action == 'synchronize' ||
       (github.event.sender.login != 'github-actions[bot]' &&
        (github.event.label.name == 'override:pr-readiness' ||
         startsWith(github.event.label.name, 'pr-readiness:')))

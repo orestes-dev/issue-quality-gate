@@ -474,6 +474,10 @@ test("the PR workflow couples the trigger filter to the schema strings", () => {
     yaml.includes(`github.event.sender.login != '${GATE_SENDER}'`),
     `${rel} is missing the human-sender guard`,
   );
+  assert.ok(
+    yaml.includes("synchronize"),
+    `${rel} must re-run on new pushes (synchronize), so the required check-run exists on the new head SHA`,
+  );
 });
 
 /**

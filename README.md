@@ -336,6 +336,14 @@ and needs `permissions: pull-requests: write`, `contents: read`, and
 the labels of same-repo issues the PR closes (`closingIssuesReferences`). Without
 `issues: read` the gate hard-fails every PR that uses `Closes #N`.
 
+It also triggers on `synchronize`, so a push re-runs it. Nothing a push changes
+can move the verdict, since the gate reads the title, body, and linked issues.
+The re-run exists because a required status check is a property of the commit,
+not of the PR: the check-run stays on the SHA it ran against, so a PR whose head
+moved would be evaluated against a head carrying no `pr-readiness` check-run at
+all, and protection blocks on an absent check with nothing in flight to clear it
+([ADR 0019](docs/adr/0019-a-required-gate-runs-on-every-head-sha.md)).
+
 ## Commit-hygiene gate
 
 The merge-blocking mirror of the local [git hooks](#git-hooks). It runs the same
