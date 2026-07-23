@@ -298,10 +298,7 @@ flowchart TD
 ## Pull request gate
 
 The merge-blocking gate for PRs. It runs the same core over a pull request on
-`pull_request` events (including `synchronize`: a push cannot change the verdict,
-but a required status check binds to the head SHA, so the gate must report on the
-new head or protection blocks with nothing pending) and checks structural
-presence, never conformance:
+`pull_request` events and checks structural presence, never conformance:
 
 - **Title**: Conventional Commits `type(scope): summary`, same rule as issues.
 - **Required sections**: `## Summary`, `## Verification`, `## Scope`, and
@@ -338,6 +335,14 @@ and needs `permissions: pull-requests: write`, `contents: read`, and
 `issues: read`. The last is required so the linked-issue readiness check can read
 the labels of same-repo issues the PR closes (`closingIssuesReferences`). Without
 `issues: read` the gate hard-fails every PR that uses `Closes #N`.
+
+It also triggers on `synchronize`, so a push re-runs it. Nothing a push changes
+can move the verdict, since the gate reads the title, body, and linked issues.
+The re-run exists because a required status check is a property of the commit,
+not of the PR: the check-run stays on the SHA it ran against, so a PR whose head
+moved would be evaluated against a head carrying no `pr-readiness` check-run at
+all, and protection blocks on an absent check with nothing in flight to clear it
+([ADR 0019](docs/adr/0019-a-required-gate-runs-on-every-head-sha.md)).
 
 ## Commit-hygiene gate
 
